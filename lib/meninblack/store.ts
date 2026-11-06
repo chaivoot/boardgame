@@ -1,27 +1,48 @@
+import { createClient } from "redis";
 import { advance, GameError, type State } from "./engine.ts";
 
 /**
- * Room storage. Uses Upstash Redis (REST) when configured — this is what Vercel's
- * "Upstash for Redis" marketplace integration provides. Falls back to process memory,
- * which only works with a single server process (local `next dev`).
+ * Room storage. Supported backends, first match wins:
+ *  1. Upstash Redis REST  — KV_REST_API_URL + KV_REST_API_TOKEN, or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+ *  2. Any Redis server    — REDIS_URL or KV_URL (e.g. Vercel's Redis integration)
+ *  3. Process memory      — local `next dev` only; refused on Vercel because instances don't share memory
  */
-const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const REST_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const REST_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const TCP_URL = process.env.REDIS_URL || process.env.KV_URL;
 const TTL = 60 * 60 * 24; // rooms expire after 24h idle
 const key = (code: string) => `mib:room:${code}`;
 
-export const usingRedis = !!(URL_ && TOKEN);
+export const backend: "rest" | "tcp" | "memory" = REST_URL && REST_TOKEN ? "rest" : TCP_URL ? "tcp" : "memory";
+const onVercel = !!process.env.VERCEL;
+
+type Tcp = ReturnType<typeof createClient>;
+const g = globalThis as { __mibTcp?: Promise<Tcp>; __mibRooms?: Map<string, string> };
+function tcp(): Promise<Tcp> {
+  return (g.__mibTcp ??= (async () => {
+    const c = createClient({ url: TCP_URL });
+    c.on("error", (e) => console.error("redis", e));
+    await c.connect();
+    return c;
+  })().catch((e) => { g.__mibTcp = undefined; throw e; }));
+}
 
 async function redis(cmd: (string | number)[]): Promise<unknown> {
-  const res = await fetch(URL_!, {
+  if (backend === "tcp") return (await tcp()).sendCommand(cmd.map(String));
+  const res = await fetch(REST_URL!, {
     method: "POST",
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${REST_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify(cmd),
     cache: "no-store",
   });
   const j = (await res.json()) as { result?: unknown; error?: string };
   if (!res.ok || j.error) throw new Error(`redis: ${j.error ?? res.status}`);
   return j.result;
+}
+
+function assertStore() {
+  if (backend === "memory" && onVercel)
+    throw new GameError("ยังไม่ได้เชื่อมต่อฐานข้อมูล Redis กับโปรเจกต์บน Vercel (ดู /boardgame/api/meninblack/health)");
 }
 
 // compare-and-set on the version embedded in the stored JSON
@@ -35,17 +56,19 @@ if v == tonumber(ARGV[1]) then
 end
 return 0`;
 
-const mem: Map<string, string> = ((globalThis as { __mibRooms?: Map<string, string> }).__mibRooms ??= new Map());
+const mem: Map<string, string> = (g.__mibRooms ??= new Map());
 
 export async function loadRoom(code: string): Promise<State | null> {
-  const raw = usingRedis ? ((await redis(["GET", key(code)])) as string | null) : mem.get(key(code)) ?? null;
+  assertStore();
+  const raw = backend !== "memory" ? ((await redis(["GET", key(code)])) as string | null) : mem.get(key(code)) ?? null;
   return raw ? (JSON.parse(raw) as State) : null;
 }
 
 /** Saves `next` only if the stored version is still `expectV` (-1 = must not exist). */
 async function cas(code: string, expectV: number, next: State): Promise<boolean> {
   const raw = JSON.stringify(next);
-  if (usingRedis) return (await redis(["EVAL", CAS, 1, key(code), expectV, raw, TTL])) === 1;
+  assertStore();
+  if (backend !== "memory") return Number(await redis(["EVAL", CAS, 1, key(code), expectV, raw, TTL])) === 1;
   const cur = mem.get(key(code));
   const v = cur ? (JSON.parse(cur) as State).v : -1;
   if (v !== expectV) return false;
