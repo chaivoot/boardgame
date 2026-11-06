@@ -72,6 +72,8 @@ export interface State {
   botAt?: Record<string, number>;
   claims?: { day: number; name: string; text: string; bot?: boolean }[];
   botRole?: Record<string, RoleKey>;
+  /** today's public suspicions: who (player id) suspects which player ids */
+  suspects?: Record<string, string[]>;
 }
 
 export class GameError extends Error {}
@@ -154,6 +156,7 @@ export type Action =
   | { type: "kick"; playerId: string }
   | { type: "addBot" }
   | { type: "claim"; role: RoleKey; info: ClaimInfo }
+  | { type: "suspect"; playerId: string; on: boolean }
   | { type: "start" }
   | { type: "ready" }
   | { type: "nightAct"; target: number | string | null }
@@ -187,6 +190,17 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       if (st.days !== undefined) s.settings.days = Math.max(1, Math.min(5, Math.round(st.days)));
       if (st.discussSec !== undefined) s.settings.discussSec = Math.max(30, Math.min(1200, Math.round(st.discussSec)));
       if (st.revealOnDeath !== undefined) s.settings.revealOnDeath = !!st.revealOnDeath;
+      return;
+    }
+    case "suspect": {
+      if (s.phase !== "day" && s.phase !== "vote") fail("ระบุคนที่สงสัยได้เฉพาะตอนกลางวัน");
+      if (!me.alive) fail("ผู้เล่นที่ตายแล้วระบุไม่ได้");
+      const t = playerById(s, a.playerId);
+      if (!t || !t.alive || t.id === me.id) fail("เลือกผู้เล่นไม่ถูกต้อง");
+      s.suspects ??= {};
+      const list = new Set(s.suspects[me.id] ?? []);
+      if (a.on) list.add(a.playerId); else list.delete(a.playerId);
+      s.suspects[me.id] = [...list];
       return;
     }
     case "claim": {
@@ -272,7 +286,7 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       for (const p of s.players) Object.assign(p, { role: null, room: null, startRoom: null, alive: true, death: null, ready: false });
       Object.assign(s, {
         phase: "lobby", day: 1, marks: {}, lastLock: null, drunkUsed: false, night: null, notices: {}, morning: [],
-        dayEndsAt: null, votes: {}, voteResult: null, log: [], history: [], result: null, botAt: {}, claims: [], botRole: {},
+        dayEndsAt: null, votes: {}, voteResult: null, log: [], history: [], result: null, botAt: {}, claims: [], botRole: {}, suspects: {},
       });
       return;
     }
@@ -381,6 +395,7 @@ function beginNight(s: State, now: number) {
   s.votes = {};
   s.voteResult = null;
   s.morning = [];
+  s.suspects = {};
   enterStage(s, 1, now);
 }
 
@@ -689,6 +704,8 @@ function postBotClaims(s: State, n: Night) {
     else if (n.acts[b.id]) text = `ฉันเป็น${ROLES[b.role!].th} — ${strip(n.acts[b.id].result)}`;
     else text = `ฉันเป็น${ROLES[b.role!].th} — คืนนี้ไม่มีข้อมูลใหม่`;
     s.claims.push({ day: s.day, name: b.name, text, bot: true });
+    const pool = s.players.filter((p) => p.alive && p.id !== b.id && !(isEvil(b) && isEvil(p)));
+    if (pool.length) (s.suspects ??= {})[b.id] = [pick(pool).id];
   }
 }
 

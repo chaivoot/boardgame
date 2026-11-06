@@ -482,18 +482,34 @@ function Claims({ view }: { view: View }) {
 }
 
 function PlayersAndLog({ view, send, busy }: { view: View; send?: P["send"]; busy?: boolean }) {
+  const canSuspect = !!send && view.me.alive && (view.phase === "day" || view.phase === "vote");
   return (
     <>
       {send && (view.phase === "day" || view.phase === "vote") && <ClaimForm key={view.day} view={view} send={send} busy={!!busy} />}
       <Claims view={view} />
       <h3 style={{ marginTop: 16 }}>ผู้เล่น ({view.players.filter((x) => x.alive).length} คนยังอยู่)</h3>
+      {canSuspect && <p className="muted small">แตะ 🤔 เพื่อบอกทุกคนว่าวันนี้คุณสงสัยใคร (เลือกได้หลายคน แตะซ้ำเพื่อยกเลิก)</p>}
       <div className="plist">
-        {view.players.map((pl) => (
-          <div key={pl.id} className={`pitem ${pl.alive ? "" : "dead"}`}>
-            <span>{pl.bot && "🤖 "}{pl.name}{pl.id === view.me.id && " (คุณ)"}</span>
-            <span className="small muted">{pl.alive ? (pl.voted === undefined ? "" : pl.voted ? <span className="pill ok">โหวตแล้ว</span> : <span className="pill">ยังไม่โหวต</span>) : pl.death}</span>
-          </div>
-        ))}
+        {view.players.map((pl) => {
+          const mine = view.mySuspects.includes(pl.id);
+          return (
+            <div key={pl.id} className={`pitem ${pl.alive ? "" : "dead"} ${mine ? "suspected" : ""}`}>
+              <span>
+                {pl.bot && "🤖 "}{pl.name}{pl.id === view.me.id && " (คุณ)"}
+                {pl.alive && pl.suspectedBy.length > 0 && (
+                  <span className="sus-by">🤔 {pl.suspectedBy.length} · {pl.suspectedBy.join(", ")}</span>
+                )}
+              </span>
+              <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                <span className="small muted">{pl.alive ? (pl.voted === undefined ? "" : pl.voted ? <span className="pill ok">โหวตแล้ว</span> : <span className="pill">ยังไม่โหวต</span>) : pl.death}</span>
+                {canSuspect && pl.alive && pl.id !== view.me.id && (
+                  <button className={`btn sus ${mine ? "sel" : ""}`} disabled={busy} aria-pressed={mine}
+                    onClick={() => send!({ type: "suspect", playerId: pl.id, on: !mine })}>🤔{mine ? " สงสัย" : ""}</button>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
       <h3 style={{ marginTop: 16 }}>บันทึกสาธารณะ</h3>
       <div className="log">{view.log.length ? view.log.map((l, i) => <div key={i}>{l}</div>) : <div>—</div>}</div>

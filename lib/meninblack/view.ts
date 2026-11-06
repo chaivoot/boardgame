@@ -1,7 +1,7 @@
 import { ROLES, type RoleKey } from "./roles.ts";
 import { holderOf, isEvil, lastNightResult, playerById, stageActors, allRooms, type State, type Mark, type Phase, type Settings } from "./engine.ts";
 
-export interface PublicPlayer { id: string; name: string; alive: boolean; death: string | null; ready: boolean; isHost: boolean; voted?: boolean; bot?: boolean }
+export interface PublicPlayer { id: string; name: string; alive: boolean; death: string | null; ready: boolean; isHost: boolean; voted?: boolean; bot?: boolean; suspectedBy: string[] }
 
 export interface MyTask {
   kind: "player" | "room" | "floor" | "col";
@@ -34,6 +34,7 @@ export interface View {
   log: string[];
   claims: { day: number; name: string; text: string; bot?: boolean }[];
   myLastResult: string | null;
+  mySuspects: string[];
   result: State["result"];
   reveal: { name: string; role: RoleKey; room: number; startRoom: number; alive: boolean; death: string | null }[] | null;
   history: State["history"] | null;
@@ -89,6 +90,7 @@ export function viewFor(s: State, playerId: string, now = Date.now()): View {
     players: s.players.map((p) => ({
       id: p.id, name: p.name, alive: p.alive, death: p.death, ready: p.ready, isHost: p.id === s.hostId,
       voted: s.phase === "vote" ? s.votes[p.id] !== undefined : undefined, bot: !!p.bot,
+      suspectedBy: Object.entries(s.suspects ?? {}).filter(([, ids]) => ids.includes(p.id)).map(([id]) => playerById(s, id)?.name ?? "?"),
     })),
     me: { id: me.id, name: me.name, isHost: me.id === s.hostId, alive: me.alive, role: me.role, room: me.room, ready: me.ready },
     mates: me.role && isEvil(me) ? s.players.filter((p) => p.id !== me.id && isEvil(p)).map((p) => ({ name: p.name, role: p.role! })) : [],
@@ -101,6 +103,7 @@ export function viewFor(s: State, playerId: string, now = Date.now()): View {
     voteResult: s.voteResult,
     log: s.log,
     claims: s.claims ?? [],
+    mySuspects: (s.suspects ?? {})[me.id] ?? [],
     myLastResult: s.phase === "day" || s.phase === "vote" ? lastNightResult(s, me) : null,
     result: s.result,
     reveal: ended ? s.players.map((p) => ({ name: p.name, role: p.role!, room: p.room!, startRoom: p.startRoom!, alive: p.alive, death: p.death })) : null,
