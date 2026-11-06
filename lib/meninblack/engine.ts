@@ -17,6 +17,7 @@ export interface Player {
   alive: boolean;
   death: string | null;
   ready: boolean;
+  bot?: boolean;
 }
 
 export interface Settings {
@@ -63,6 +64,10 @@ export interface State {
   log: string[];
   history: { night: number; acts: { role: RoleKey; name: string; text: string }[] }[];
   result: { winner: "good" | "evil"; reason: string } | null;
+  /** bots: when each bot will act next (ms), public statements they make each morning, and the role an evil bot pretends to be */
+  botAt?: Record<string, number>;
+  claims?: { day: number; name: string; text: string }[];
+  botRole?: Record<string, RoleKey>;
 }
 
 export class GameError extends Error {}
@@ -136,6 +141,7 @@ export function joinRoom(s: State, rawName: string): Player {
 export type Action =
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "kick"; playerId: string }
+  | { type: "addBot" }
   | { type: "start" }
   | { type: "ready" }
   | { type: "nightAct"; target: number | string | null }
@@ -166,6 +172,15 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       if (st.days !== undefined) s.settings.days = Math.max(1, Math.min(5, Math.round(st.days)));
       if (st.discussSec !== undefined) s.settings.discussSec = Math.max(30, Math.min(1200, Math.round(st.discussSec)));
       if (st.revealOnDeath !== undefined) s.settings.revealOnDeath = !!st.revealOnDeath;
+      return;
+    }
+    case "addBot": {
+      hostOnly();
+      if (s.phase !== "lobby") fail("เพิ่มบอทได้เฉพาะก่อนเริ่มเกม");
+      if (s.players.length >= MAX_PLAYERS) fail(`ห้องเต็มแล้ว (สูงสุด ${MAX_PLAYERS} คน)`);
+      let k = 1;
+      while (s.players.some((p) => p.name === `Bot-${k}`)) k++;
+      s.players.push({ id: randomId(8), token: randomId(24), name: `Bot-${k}`, role: null, room: null, startRoom: null, alive: true, death: null, ready: false, bot: true });
       return;
     }
     case "kick": {
@@ -231,7 +246,7 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       for (const p of s.players) Object.assign(p, { role: null, room: null, startRoom: null, alive: true, death: null, ready: false });
       Object.assign(s, {
         phase: "lobby", day: 1, marks: {}, lastLock: null, drunkUsed: false, night: null, notices: {}, morning: [],
-        dayEndsAt: null, votes: {}, voteResult: null, log: [], history: [], result: null,
+        dayEndsAt: null, votes: {}, voteResult: null, log: [], history: [], result: null, botAt: {}, claims: [], botRole: {},
       });
       return;
     }
@@ -252,6 +267,9 @@ function startGame(s: State) {
   const rooms = shuffle(allRooms(s.settings.floors)).slice(0, n);
   s.players.forEach((p, i) => Object.assign(p, { role: dealt[i], room: rooms[i], startRoom: rooms[i], alive: true, death: null, ready: false }));
   s.phase = "deal";
+  s.botAt = {};
+  s.claims = [];
+  s.botRole = {};
 }
 
 const rolesInPlay = (s: State) => s.settings.roles;
@@ -268,6 +286,7 @@ export function stageActors(s: State, stage: 1 | 2 | 3): Player[] {
 function enterStage(s: State, stage: 1 | 2 | 3, now: number) {
   const n = s.night!;
   n.stage = stage;
+  s.botAt = {};
   // stages with nobody able to act still pause briefly so nobody can infer who is dead
   const hasRoleInPlay = rolesInPlay(s).some((r) => ROLES[r].stage === stage);
   n.autoAt = stageActors(s, stage).length === 0 ? now + (hasRoleInPlay ? 4000 + Math.random() * 4000 : 0) : null;
@@ -363,7 +382,7 @@ function nightAct(s: State, me: Player, target: number | string | null) {
 /** Moves the game forward when everyone needed has finished, or a timer passed. Returns true if state changed. */
 export function advance(s: State, now = Date.now()): boolean {
   let changed = false;
-  for (let guard = 0; guard < 10; guard++) {
+  for (let guard = 0; guard < 30; guard++) {
     const step = advanceOnce(s, now);
     if (!step) break;
     changed = true;
@@ -372,6 +391,7 @@ export function advance(s: State, now = Date.now()): boolean {
 }
 
 function advanceOnce(s: State, now: number): boolean {
+  if (runBots(s, now)) return true;
   switch (s.phase) {
     case "deal":
       if (s.players.every((p) => p.ready)) { beginNight(s, now); return true; }
@@ -438,9 +458,11 @@ function endNight(s: State, now: number) {
   if (w) return endGame(s, w);
   s.phase = "day";
   s.dayEndsAt = now + s.settings.discussSec * 1000;
+  postBotClaims(s, n);
 }
 
 function openVote(s: State) {
+  s.botAt = {};
   s.phase = "vote";
   s.votes = {};
   s.dayEndsAt = null;
@@ -497,4 +519,111 @@ function endGame(s: State, w: NonNullable<State["result"]>) {
   s.phase = "end";
   s.night = null;
   s.dayEndsAt = null;
+}
+
+/* ================= BOTS ================= */
+const BOT_MIN_MS = 1500, BOT_MAX_MS = 4500;
+const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
+const floorsList = (s: State) => Array.from({ length: s.settings.floors }, (_, i) => i + 1);
+const openRooms = (s: State) => allRooms(s.settings.floors).filter((r) => !s.marks[r]);
+
+/** Lets bots take their turns once their random delay has passed. Returns true if state changed. */
+function runBots(s: State, now: number): boolean {
+  const bots = s.players.filter((p) => p.bot);
+  if (!bots.length) return false;
+  s.botAt ??= {};
+  let changed = false;
+  for (const b of bots) {
+    let need = false;
+    if (s.phase === "deal") need = !b.ready;
+    else if (s.phase === "night" && s.night && b.alive && !s.night.acts[b.id] && stageActors(s, s.night.stage).some((p) => p.id === b.id)) {
+      const acc = holderOf(s, "accomplice");
+      need = !(b.role === "murderer" && acc && acc.alive && !s.night.acts[acc.id]);
+    } else if (s.phase === "vote") need = b.alive && s.votes[b.id] === undefined;
+    if (!need) continue;
+    const at = s.botAt[b.id];
+    if (at === undefined) { s.botAt[b.id] = now + BOT_MIN_MS + Math.random() * (BOT_MAX_MS - BOT_MIN_MS); changed = true; continue; }
+    if (now < at) continue;
+    delete s.botAt[b.id];
+    try { botAct(s, b); } catch (e) { console.error("bot", b.name, e); }
+    return true; // let the normal flow react before the next bot moves
+  }
+  return changed;
+}
+
+function botAct(s: State, b: Player) {
+  if (s.phase === "deal") { b.ready = true; return; }
+  if (s.phase === "vote") { s.votes[b.id] = botVote(s, b); return; }
+  const n = s.night!;
+  const others = s.players.filter((p) => p.alive && p.id !== b.id);
+  let target: number | string | null = null;
+  switch (b.role) {
+    case "drunk": target = Math.random() < 0.25 ? pick(others).id : null; break;
+    case "keymaster": target = pick(openRooms(s).filter((r) => r !== s.lastLock)); break;
+    case "housekeeper": case "witness": target = pick(floorsList(s)); break;
+    case "windowcleaner": target = pick([1, 2, 3]); break;
+    case "detective": target = pick(others).id; break;
+    case "accomplice": target = pick(others.filter((p) => p.role !== "murderer")).id; break;
+    case "murderer": {
+      const valid = openRooms(s).filter((r) => r !== b.room);
+      const acc = holderOf(s, "accomplice");
+      const tip = acc && n.acts[acc.id] ? playerById(s, String(n.acts[acc.id].target)) : undefined;
+      const onFloor = tip?.room ? valid.filter((r) => floorOf(r) === floorOf(tip.room!)) : [];
+      target = onFloor.length && Math.random() < 0.75 ? pick(onFloor) : pick(valid);
+      break;
+    }
+  }
+  nightAct(s, b, target);
+  n.acts[b.id].done = true;
+}
+
+function botVote(s: State, b: Player): number | "skip" {
+  const rooms = openRooms(s).filter((r) => r !== b.room);
+  if (!rooms.length) return "skip";
+  // follow the room most others picked so far (bots blend in), otherwise guess
+  const tally = new Map<number, number>();
+  for (const v of Object.values(s.votes)) if (typeof v === "number" && rooms.includes(v)) tally.set(v, (tally.get(v) ?? 0) + 1);
+  const best = [...tally.entries()].sort((a, c) => c[1] - a[1])[0];
+  if (best && Math.random() < 0.7) return best[0];
+  if (!isEvil(b) && Math.random() < 0.1) return "skip";
+  return pick(rooms);
+}
+
+/** Each morning, living bots announce what they "learned" — good bots tell the truth, evil bots lie. */
+function postBotClaims(s: State, n: Night) {
+  s.claims ??= [];
+  s.botRole ??= {};
+  for (const b of s.players.filter((p) => p.bot && p.alive)) {
+    let text: string;
+    if (isEvil(b)) text = fakeClaim(s, b);
+    else if (b.role === "guest") text = "ฉันเป็นแขก ไม่มีข้อมูลตอนกลางคืน";
+    else if (n.acts[b.id]) text = `ฉันเป็น${ROLES[b.role!].th} — ${strip(n.acts[b.id].result)}`;
+    else text = `ฉันเป็น${ROLES[b.role!].th} — คืนนี้ไม่มีข้อมูลใหม่`;
+    s.claims.push({ day: s.day, name: b.name, text });
+  }
+}
+
+function fakeClaim(s: State, b: Player): string {
+  const choices = (["housekeeper", "windowcleaner", "detective", "witness", "keymaster", "guest"] as RoleKey[])
+    .filter((r) => r === "guest" || s.settings.roles.includes(r));
+  // evil bots on the same team never pretend to be the same role
+  const taken = Object.entries(s.botRole!).filter(([id]) => id !== b.id).map(([, r]) => r);
+  const free = choices.filter((r) => r === "guest" || !taken.includes(r));
+  const role = (s.botRole![b.id] ??= pick(free.length ? free : choices));
+  const alive = s.players.filter((p) => p.alive);
+  const count = () => Math.floor(Math.random() * Math.min(4, alive.length));
+  let info: string;
+  switch (role) {
+    case "housekeeper": info = `ชั้น ${pick(floorsList(s))} มีผู้รอดชีวิต ${count()} คน`; break;
+    case "windowcleaner": { const c = pick([1, 2, 3]); info = `แถว ${c} (ห้อง x0${c}) มีผู้รอดชีวิต ${count()} คน`; break; }
+    case "detective": info = `${pick(alive.filter((p) => p.id !== b.id)).name} พักอยู่ ชั้น ${pick(floorsList(s))}`; break;
+    case "keymaster": info = `ล็อกห้อง ${pick(openRooms(s))} แล้ว ห้องนี้ปลอดภัยคืนนี้`; break;
+    case "witness": {
+      const f = pick(floorsList(s));
+      info = Math.random() < 0.5 ? `ชั้น ${f} เงียบสงบ ไม่เห็นฆาตกร` : `เห็นฆาตกรขึ้นมาลงมือที่ชั้น ${f}! ห้องของฆาตกร ${pick(["สูงกว่า", "ต่ำกว่า", "อยู่ชั้นเดียวกับ"])}ชั้นนี้`;
+      break;
+    }
+    default: return "ฉันเป็นแขก ไม่มีข้อมูลตอนกลางคืน";
+  }
+  return `ฉันเป็น${ROLES[role].th} — ${info}`;
 }
