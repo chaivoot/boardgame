@@ -1,5 +1,5 @@
 "use client";
-export const BASE = "/boardgame";
+export const BASE = "";
 export const API = `${BASE}/api/meninblack/rooms`;
 
 export type Session = { token: string; playerId: string };

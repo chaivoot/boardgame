@@ -46,7 +46,7 @@ async function redis(cmd: (string | number)[]): Promise<unknown> {
 
 function assertStore() {
   if (backend === "memory" && onVercel)
-    throw new GameError("ยังไม่ได้เชื่อมต่อฐานข้อมูล Redis กับโปรเจกต์บน Vercel (ดู /boardgame/api/meninblack/health)");
+    throw new GameError("ยังไม่ได้เชื่อมต่อฐานข้อมูล Redis กับโปรเจกต์บน Vercel (ดู /api/meninblack/health)");
 }
 
 // compare-and-set on the version embedded in the stored JSON

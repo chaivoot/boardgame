@@ -1,8 +1,8 @@
 # boardgame
 
-เกมกระดานออนไลน์สำหรับฝึกซ้อม (Next.js) · ทุกหน้าอยู่ใต้ `basePath: /boardgame`
+เกมกระดานออนไลน์สำหรับฝึกซ้อม (Next.js) · https://boardgame.chaivoot.com
 
-## ชายชุดดำ (Men in Black) — `/boardgame/meninblack`
+## ชายชุดดำ (Men in Black) — `/meninblack`
 
 เกมสืบสวนหาฆาตกรในตึก 4–9 คน เล่นออนไลน์ แต่ละคนใช้มือถือตัวเอง
 
@@ -28,7 +28,7 @@
 ## รันในเครื่อง
 ```bash
 npm install
-npm run dev   # http://localhost:3000/boardgame/meninblack
+npm run dev   # http://localhost:3000/meninblack
 npm test      # จำลองเล่น 400 เกม เช็คว่ากติกาไม่ค้าง
 ```
 ถ้าไม่ได้ตั้ง Redis ระบบจะเก็บห้องในหน่วยความจำแทน ใช้ได้เฉพาะตอน dev
@@ -38,16 +38,9 @@ npm test      # จำลองเล่น 400 เกม เช็คว่า�
 2. **Storage** → สร้าง Redis (Upstash หรือ Redis ตัวไหนก็ได้) แล้ว connect เข้าโปรเจกต์ ระบบรองรับ env ทุกแบบต่อไปนี้
    - `KV_REST_API_URL` + `KV_REST_API_TOKEN` หรือ `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`
    - `REDIS_URL` หรือ `KV_URL`
-3. Redeploy แล้วเปิด `/boardgame/api/meninblack/health` ต้องเห็น `"ok":true` และ `backend` ไม่ใช่ `memory`
-4. เล่นที่ `https://<project>.vercel.app/boardgame/meninblack`
+3. Redeploy แล้วเปิด `/api/meninblack/health` ต้องเห็น `"ok":true` และ `backend` ไม่ใช่ `memory`
+4. เล่นที่ `https://<project>.vercel.app/meninblack`
 
-### ให้อยู่ใต้ chaivoot.com (เว็บหลัก Astro)
-เพิ่มใน `vercel.json` ของโปรเจกต์ Astro:
-```json
-{
-  "rewrites": [
-    { "source": "/boardgame", "destination": "https://<project>.vercel.app/boardgame" },
-    { "source": "/boardgame/:path*", "destination": "https://<project>.vercel.app/boardgame/:path*" }
-  ]
-}
-```
+### โดเมน
+ผูก custom domain `boardgame.chaivoot.com` ที่โปรเจกต์ boardgame บน Vercel (Settings → Domains)
+แล้วเพิ่ม DNS record ตามที่ Vercel บอก เกมจะอยู่ที่ `https://boardgame.chaivoot.com/meninblack`
