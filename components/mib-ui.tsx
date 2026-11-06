@@ -47,6 +47,48 @@ export function Board({ floors, marks, pick, sel, onPick }: {
   );
 }
 
+const MARK_TEXT: Record<Mark, string> = { murdered: "ฆาตกรรม", empty: "ห้องว่าง", closed: "ปิดปรับปรุง", mob: "ประชาทัณฑ์" };
+
+/** Pick a whole floor (row) or a whole column on a board laid out exactly like the main board. */
+export function LinePicker({ kind, floors, marks, myRoom, sel, onPick }: {
+  kind: "floor" | "col"; floors: number; marks: Record<string, Mark>; myRoom: number | null; sel: number | null; onPick: (v: number) => void;
+}) {
+  const rows = [];
+  for (let f = floors; f >= 1; f--) {
+    const rowSel = kind === "floor" && sel === f;
+    const cells = [1, 2, 3].map((c) => {
+      const r = f * 100 + c, mk = marks[r];
+      const on = rowSel || (kind === "col" && sel === c);
+      return (
+        <span key={r} className={`room line ${on ? "on" : ""}`} onClick={kind === "col" ? () => onPick(c) : undefined}>
+          {r}
+          {r === myRoom && <span className="me">ห้องคุณ</span>}
+          {mk && <span className={`mk ${mk}`}><b>{r}</b>{MARK_TEXT[mk]}</span>}
+        </span>
+      );
+    });
+    rows.push(kind === "floor" ? (
+      <button key={f} className={`floor floorpick ${rowSel ? "on" : ""}`} onClick={() => onPick(f)} aria-label={`ชั้น ${f}`}>
+        <span className="flabel"><span>ชั้น</span><b>{f}</b></span>{cells}
+      </button>
+    ) : (
+      <div key={f} className="floor"><div className="flabel"><span>ชั้น</span><b>{f}</b></div>{cells}</div>
+    ));
+  }
+  return (
+    <div className="board">
+      {rows}
+      <div className="cols">
+        <span />
+        {[1, 2, 3].map((c) => kind === "col"
+          ? <button key={c} className={`btn colpick ${sel === c ? "sel" : ""}`} onClick={() => onPick(c)}>แถว {c}</button>
+          : <span key={c}>แถว {c}</span>)}
+      </div>
+      <p className="center muted small">{kind === "floor" ? "แตะแถวของชั้นที่ต้องการ" : "แตะห้องใดก็ได้ในแนวตั้งที่ต้องการ หรือปุ่มแถวด้านล่าง"}</p>
+    </div>
+  );
+}
+
 export function DayTrack({ day, max }: { day: number; max: number }) {
   return (
     <div className="daytrack">
