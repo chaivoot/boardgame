@@ -1,5 +1,5 @@
 import { ROLES, type RoleKey } from "./roles.ts";
-import { holderOf, isEvil, playerById, stageActors, allRooms, type State, type Mark, type Phase, type Settings } from "./engine.ts";
+import { holderOf, isEvil, lastNightResult, playerById, stageActors, allRooms, type State, type Mark, type Phase, type Settings } from "./engine.ts";
 
 export interface PublicPlayer { id: string; name: string; alive: boolean; death: string | null; ready: boolean; isHost: boolean; voted?: boolean; bot?: boolean }
 
@@ -32,7 +32,8 @@ export interface View {
   votedCount: number;
   voteResult: State["voteResult"];
   log: string[];
-  claims: { day: number; name: string; text: string }[];
+  claims: { day: number; name: string; text: string; bot?: boolean }[];
+  myLastResult: string | null;
   result: State["result"];
   reveal: { name: string; role: RoleKey; room: number; startRoom: number; alive: boolean; death: string | null }[] | null;
   history: State["history"] | null;
@@ -100,6 +101,7 @@ export function viewFor(s: State, playerId: string, now = Date.now()): View {
     voteResult: s.voteResult,
     log: s.log,
     claims: s.claims ?? [],
+    myLastResult: s.phase === "day" || s.phase === "vote" ? lastNightResult(s, me) : null,
     result: s.result,
     reveal: ended ? s.players.map((p) => ({ name: p.name, role: p.role!, room: p.room!, startRoom: p.startRoom!, alive: p.alive, death: p.death })) : null,
     history: ended ? s.history : null,

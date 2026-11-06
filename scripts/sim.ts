@@ -113,6 +113,41 @@ console.log("ok: board size follows player count");
 }
 console.log("ok: lynched drunk wins");
 
+// players can announce a true or fake role, with true, made-up or no info; a new claim replaces the old one
+{
+  const { state: s } = newRoom("CLM", "H");
+  for (let i = 1; i < 6; i++) joinRoom(s, `P${i}`);
+  applyAction(s, s.hostId, { type: "start" });
+  for (const p of s.players) applyAction(s, p.id, { type: "ready" });
+  let t = Date.now();
+  for (let g = 0; g < 50 && s.phase === "night"; g++) {
+    t += 1000;
+    for (const p of s.players) {
+      const task = viewFor(s, p.id, t).night?.task;
+      if (!task || task.blockedReason) continue;
+      if (!task.chosen) { const o = task.canSkip ? null : task.options[0]; applyAction(s, p.id, { type: "nightAct", target: o === null ? null : typeof o === "object" ? o.id : o }, t); }
+      else if (!task.chosen.done) applyAction(s, p.id, { type: "nightDone" }, t);
+    }
+    advance(s, t + 10000);
+  }
+  if (s.phase !== "day") throw new Error(`claim test: expected day, got ${s.phase}`);
+  const hk = s.players.find((p) => p.role === "housekeeper" && p.alive);
+  if (hk) {
+    applyAction(s, hk.id, { type: "claim", role: "housekeeper", info: { mode: "real" } });
+    const c = s.claims!.find((x) => x.name === hk.name)!;
+    if (!/ฉันเป็นแม่บ้าน — ชั้น \d+ มีผู้รอดชีวิต \d+ คน/.test(c.text)) throw new Error(`real claim text: ${c.text}`);
+    applyAction(s, hk.id, { type: "claim", role: "detective", info: { mode: "fake", playerId: s.players[0].id, floor: 1 } });
+    const mine = s.claims!.filter((x) => x.name === hk.name);
+    if (mine.length !== 1 || !mine[0].text.startsWith("ฉันเป็นนักสืบ — ")) throw new Error(`replaced claim: ${JSON.stringify(mine)}`);
+    applyAction(s, hk.id, { type: "claim", role: "guest", info: { mode: "none" } });
+    if (s.claims!.find((x) => x.name === hk.name)!.text !== "ฉันเป็นแขก") throw new Error("no-info claim");
+  }
+  let threw = false;
+  try { applyAction(s, s.players[0].id, { type: "claim", role: "housekeeper", info: { mode: "fake", floor: 99, count: 1 } }); } catch { threw = true; }
+  if (!threw) throw new Error("out-of-range fake info should be rejected");
+}
+console.log("ok: player claims");
+
 // one human host + bots: bots must carry every phase forward on their own
 function playWithBots(n: number) {
   const { state: s } = newRoom("BOTS", "Human");
