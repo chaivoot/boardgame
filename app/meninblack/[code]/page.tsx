@@ -403,7 +403,7 @@ function ClaimForm({ view, send, busy }: { view: View; send: P["send"]; busy: bo
   };
   if (!view.me.alive) return null;
   if (!open) return (
-    <button className="btn block" style={{ marginTop: 16 }} onClick={() => setOpen(true)}>
+    <button className="btn block announce" style={{ marginTop: 16 }} onClick={() => setOpen(true)}>
       📢 {mine ? "แก้ประกาศของฉัน" : "ประกาศข้อมูลของฉัน"}
     </button>
   );
@@ -420,9 +420,9 @@ function ClaimForm({ view, send, busy }: { view: View; send: P["send"]; busy: bo
       </label>
       <div className="small" style={{ marginTop: 10 }}>ข้อมูลที่เช็ค</div>
       <div className="grid3" style={{ marginTop: 4 }}>
-        <button className={`btn small ${effMode === "none" ? "sel" : ""}`} onClick={() => setMode("none")}>ไม่บอก</button>
-        <button className={`btn small ${effMode === "real" ? "sel" : ""}`} onClick={() => setMode("real")} disabled={!view.myLastResult}>บอกตามจริง</button>
-        <button className={`btn small ${effMode === "fake" ? "sel" : ""}`} onClick={() => setMode("fake")} disabled={!canFake}>แต่งเอง</button>
+        <button className={`btn small mode ${effMode === "none" ? "on" : ""}`} onClick={() => setMode("none")}>ไม่บอก</button>
+        <button className={`btn small mode ${effMode === "real" ? "on" : ""}`} onClick={() => setMode("real")} disabled={!view.myLastResult}>บอกตามจริง</button>
+        <button className={`btn small mode ${effMode === "fake" ? "on" : ""}`} onClick={() => setMode("fake")} disabled={!canFake}>แต่งเอง</button>
       </div>
       {effMode === "real" && <p className="small muted" style={{ marginTop: 8 }}>ผลเมื่อคืนของคุณ: {view.myLastResult}</p>}
       {effMode === "fake" && (
@@ -456,7 +456,7 @@ function ClaimForm({ view, send, busy }: { view: View; send: P["send"]; busy: bo
       )}
       <div className="row" style={{ marginTop: 12 }}>
         <button className="btn ghost" onClick={() => setOpen(false)}>ยกเลิก</button>
-        <button className="btn primary" style={{ flex: 1 }} disabled={busy} onClick={submit}>ประกาศ</button>
+        <button className="btn announce" style={{ flex: 1 }} disabled={busy} onClick={submit}>📢 ประกาศ</button>
       </div>
       <p className="muted small" style={{ marginTop: 8 }}>ทุกคนจะเห็นประกาศนี้ ระบบไม่ได้ตรวจว่าจริงหรือหลอก</p>
     </div>
