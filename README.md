@@ -35,9 +35,11 @@ npm test      # จำลองเล่น 400 เกม เช็คว่า�
 
 ## Deploy บน Vercel
 1. Import repo · Framework Preset: **Next.js**
-2. **Storage → Marketplace → Upstash (Redis)** แล้ว connect เข้าโปรเจกต์ (จะได้ env `KV_REST_API_URL` / `KV_REST_API_TOKEN`)
-   หรือตั้ง `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` เอง
-3. Redeploy · เปิด `https://<project>.vercel.app/boardgame/meninblack`
+2. **Storage** → สร้าง Redis (Upstash หรือ Redis ตัวไหนก็ได้) แล้ว connect เข้าโปรเจกต์ ระบบรองรับ env ทุกแบบต่อไปนี้
+   - `KV_REST_API_URL` + `KV_REST_API_TOKEN` หรือ `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`
+   - `REDIS_URL` หรือ `KV_URL`
+3. Redeploy แล้วเปิด `/boardgame/api/meninblack/health` ต้องเห็น `"ok":true` และ `backend` ไม่ใช่ `memory`
+4. เล่นที่ `https://<project>.vercel.app/boardgame/meninblack`
 
 ### ให้อยู่ใต้ chaivoot.com (เว็บหลัก Astro)
 เพิ่มใน `vercel.json` ของโปรเจกต์ Astro:
