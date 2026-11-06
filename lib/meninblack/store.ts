@@ -7,9 +7,13 @@ import { advance, GameError, type State } from "./engine.ts";
  *  2. Any Redis server    — REDIS_URL or KV_URL (e.g. Vercel's Redis integration)
  *  3. Process memory      — local `next dev` only; refused on Vercel because instances don't share memory
  */
-const REST_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const REST_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-const TCP_URL = process.env.REDIS_URL || process.env.KV_URL;
+// Vercel lets integrations add a custom prefix to these names, so match by suffix too.
+const env = process.env;
+const restKey = ["KV_REST_API_URL", "UPSTASH_REDIS_REST_URL"].find((k) => env[k] && env[k.replace(/URL$/, "TOKEN")])
+  ?? Object.keys(env).find((k) => /REST_(API_)?URL$/.test(k) && env[k]?.startsWith("https://") && env[k.replace(/URL$/, "TOKEN")]);
+const REST_URL = restKey ? env[restKey] : undefined;
+const REST_TOKEN = restKey ? env[restKey.replace(/URL$/, "TOKEN")] : undefined;
+const TCP_URL = env.REDIS_URL || env.KV_URL || Object.values(env).find((v) => /^rediss?:\/\//.test(v ?? ""));
 const TTL = 60 * 60 * 24; // rooms expire after 24h idle
 const key = (code: string) => `mib:room:${code}`;
 
