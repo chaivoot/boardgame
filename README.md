@@ -41,6 +41,9 @@ npm test      # จำลองเล่น 400 เกม เช็คว่า�
 3. Redeploy แล้วเปิด `/api/meninblack/health` ต้องเห็น `"ok":true` และ `backend` ไม่ใช่ `memory`
 4. เล่นที่ `https://<project>.vercel.app/meninblack`
 
+### Region
+`vercel.json` กำหนดให้ server รันที่ `sin1` (สิงคโปร์) ให้อยู่ที่เดียวกับฐานข้อมูล Upstash ถ้าย้ายฐานข้อมูลไป region อื่น ให้แก้ตรงนี้ตาม
+
 ### โดเมน
 ผูก custom domain `boardgame.chaivoot.com` ที่โปรเจกต์ boardgame บน Vercel (Settings → Domains)
 แล้วเพิ่ม DNS record ตามที่ Vercel บอก เกมจะอยู่ที่ `https://boardgame.chaivoot.com/meninblack`

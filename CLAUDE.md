@@ -10,6 +10,7 @@ The owner does not test on Vercel preview deployments. After finishing a change:
 ## Project
 - Next.js (App Router, TypeScript), deployed on Vercel at the root of https://boardgame.chaivoot.com
   (no basePath; old `/boardgame/...` links redirect to `/...`).
+- Functions run in `sin1` (vercel.json) next to the Upstash database in Singapore; keep them together.
 - Games live under `app/<game>/`, `app/api/<game>/`, `lib/<game>/`.
 - ชายชุดดำ (Men in Black): rules engine `lib/meninblack/engine.ts`, per-player view
   `lib/meninblack/view.ts`, storage `lib/meninblack/store.ts` (Upstash Redis via
