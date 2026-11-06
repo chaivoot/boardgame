@@ -224,7 +224,7 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
         {SPECIAL.map((k) => (
           <label className="chk" key={k}>
             <input type="checkbox" checked={st.roles.includes(k)} disabled={!host || k === "murderer" || busy} onChange={(e) => toggle(k, e.target.checked)} />
-            <span><b>{ROLES[k].en}</b> · {ROLES[k].th} <span className={`tag ${ROLES[k].team}`}>{ROLES[k].team === "evil" ? "เงามืด" : "ผู้เช่า"}</span></span>
+            <span><b>{ROLES[k].en}</b> · {ROLES[k].th} <span className={`tag ${ROLES[k].team}`}>{ROLES[k].team === "evil" ? "เงามืด" : ROLES[k].team === "neutral" ? "ฝ่ายเดียว" : "ผู้เช่า"}</span></span>
           </label>
         ))}
         <p className="muted small">GUEST (แขก) × {Math.max(0, guests)}</p>
@@ -505,10 +505,11 @@ function VoteResultScreen({ view, send, busy }: P) {
 function EndScreen({ view, send, busy }: P) {
   const w = view.result!;
   const good = w.winner === "good";
+  const winText = w.winner === "good" ? "ฝ่ายผู้เช่า ชนะ!" : w.winner === "drunk" ? "คนเมา ชนะ!" : "ฝ่ายเงามืด ชนะ!";
   return (
     <div>
       <div className={`result ${good ? "" : "evil"}`} style={{ fontSize: 26 }}>
-        {good ? "ฝ่ายผู้เช่า ชนะ!" : "ฝ่ายเงามืด ชนะ!"}
+        {winText}
         <div className="small muted" style={{ fontSize: 15 }}>{w.reason}</div>
       </div>
       <Tally view={view} />

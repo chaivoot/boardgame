@@ -28,7 +28,7 @@ export function cardSVG(k: RoleKey): string {
   <text x="125" y="236" text-anchor="middle" font-family="Oswald" font-weight="600" font-size="${r.en.length>11?22:27}" letter-spacing="3" fill="#e8ebf0">${r.en}</text>
   <text x="125" y="262" text-anchor="middle" font-family="Kanit" font-size="17" fill="${c}">${r.th}</text>
   <path d="M70 280 H180" stroke="#2a2f37"/>
-  <text x="125" y="304" text-anchor="middle" font-family="Oswald" font-size="12" letter-spacing="4" fill="#8d95a1">${r.team==='evil'?'SHADOW SIDE':'TENANT SIDE'}</text>
+  <text x="125" y="304" text-anchor="middle" font-family="Oswald" font-size="12" letter-spacing="4" fill="#8d95a1">${r.team==='evil'?'SHADOW SIDE':r.team==='neutral'?'LONE SIDE':'TENANT SIDE'}</text>
   </svg>`;
 }
 export function keycardSVG(room: number): string {

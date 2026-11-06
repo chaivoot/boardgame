@@ -4,7 +4,7 @@ import { newRoom, joinRoom, applyAction, advance, defaultSettings, type State } 
 import { viewFor } from "../lib/meninblack/view.ts";
 
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
-let goodWins = 0, evilWins = 0;
+let goodWins = 0, evilWins = 0, drunkWins = 0;
 
 function play(n: number) {
   const { state: s } = newRoom("TEST", "P0");
@@ -53,7 +53,7 @@ function play(n: number) {
   }
   if (s.phase !== "end") throw new Error(`stuck in ${s.phase} (n=${n})`);
   check(s);
-  if (s.result!.winner === "good") goodWins++; else evilWins++;
+  if (s.result!.winner === "good") goodWins++; else if (s.result!.winner === "evil") evilWins++; else drunkWins++;
 }
 
 function check(s: State) {
@@ -87,6 +87,32 @@ for (let n = 4; n <= 9; n++) {
 }
 console.log("ok: board size follows player count");
 
+// a drunk who gets lynched wins on the spot
+{
+  const { state: s } = newRoom("DRNK", "H");
+  for (let i = 1; i < 9; i++) joinRoom(s, `P${i}`);
+  applyAction(s, s.hostId, { type: "start" });
+  for (const p of s.players) applyAction(s, p.id, { type: "ready" });
+  const t = Date.now();
+  for (const p of s.players) if (p.role && p.role !== "murderer" && p.role !== "accomplice") {
+    const v = viewFor(s, p.id, t).night?.task;
+    if (v && !v.chosen) { const o = v.canSkip ? null : v.options[0]; applyAction(s, p.id, { type: "nightAct", target: o === null ? null : typeof o === "object" ? o.id : o }, t); applyAction(s, p.id, { type: "nightDone" }, t); }
+  }
+  for (const r of ["accomplice", "murderer", "witness"] as const) {
+    const p = s.players.find((q) => q.role === r)!;
+    const v = viewFor(s, p.id, t).night?.task;
+    const o = v!.options.find((x) => typeof x === "number" ? !s.players.some((q) => q.room === x) : true)!;
+    applyAction(s, p.id, { type: "nightAct", target: typeof o === "object" ? o.id : o }, t);
+    if (s.night?.acts[p.id] && !s.night.acts[p.id].done) applyAction(s, p.id, { type: "nightDone" }, t);
+  }
+  applyAction(s, s.hostId, { type: "startVote" }, t);
+  const drunk = s.players.find((p) => p.role === "drunk")!;
+  if (!drunk.alive) throw new Error("drunk test setup: drunk died at night");
+  for (const p of s.players.filter((q) => q.alive)) if (s.phase === "vote") applyAction(s, p.id, { type: "vote", room: drunk.room! }, t);
+  if (s.result?.winner !== "drunk") throw new Error(`lynched drunk should win, got ${JSON.stringify(s.result)}`);
+}
+console.log("ok: lynched drunk wins");
+
 // one human host + bots: bots must carry every phase forward on their own
 function playWithBots(n: number) {
   const { state: s } = newRoom("BOTS", "Human");
@@ -119,4 +145,4 @@ console.log("ok: 120 games with 1 human + bots");
 
 const N = 400;
 for (let i = 0; i < N; i++) play(4 + (i % 6));
-console.log(`ok: ${N} games, good ${goodWins} / evil ${evilWins}`);
+console.log(`ok: ${N} games, good ${goodWins} / evil ${evilWins} / drunk ${drunkWins}`);

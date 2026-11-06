@@ -34,7 +34,7 @@ label.chk input{width:20px;height:20px;accent-color:var(--good)}
 .brand{display:flex;align-items:center;gap:10px;font-family:Kanit;font-size:18px;letter-spacing:.5px}
 .brand svg{width:34px;height:20px}
 .tag{display:inline-block;font-size:12px;font-family:Kanit;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
-.tag.good{color:var(--good);border-color:var(--good)} .tag.evil{color:var(--evil);border-color:var(--evil)}
+.tag.good{color:var(--good);border-color:var(--good)} .tag.neutral{color:var(--gold);border-color:var(--gold)} .tag.evil{color:var(--evil);border-color:var(--evil)}
 
 /* hero */
 .hero{text-align:center;padding:24px 0 8px}

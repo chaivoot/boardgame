@@ -9,7 +9,7 @@ export type RoleKey =
   | "witness"
   | "guest";
 
-export type Team = "good" | "evil";
+export type Team = "good" | "evil" | "neutral";
 export type ActKind = "player" | "room" | "floor" | "col" | null;
 
 export interface RoleDef {
@@ -23,8 +23,8 @@ export interface RoleDef {
 }
 
 export const ROLES: Record<RoleKey, RoleDef> = {
-  drunk: { order: 1, stage: 1, en: "DRUNK", th: "คนเมา", team: "good", act: "player",
-    desc: "ครั้งเดียวต่อเกม: เลือกผู้เล่น 1 คนเพื่อสลับห้องกัน สลับตอนจบช่วงแรก ก่อนฆาตกรลงมือ (คืนไหนไม่ใช้ก็ได้)" },
+  drunk: { order: 1, stage: 1, en: "DRUNK", th: "คนเมา", team: "neutral", act: "player",
+    desc: "ฝ่ายเดียวโดดๆ: ชนะทันทีถ้าถูกประชาทัณฑ์ตอนกลางวัน · ครั้งเดียวต่อเกม เลือกผู้เล่น 1 คนเพื่อสลับห้องกัน (สลับก่อนฆาตกรลงมือ)" },
   keymaster: { order: 2, stage: 1, en: "KEYMASTER", th: "ช่างกุญแจ", team: "good", act: "room",
     desc: "เลือกล็อก 1 ห้อง ห้องนั้นปลอดภัยจากฆาตกรในคืนนั้น (ห้ามล็อกห้องเดิมซ้ำกับคืนก่อน)" },
   housekeeper: { order: 3, stage: 1, en: "HOUSEKEEPER", th: "แม่บ้าน", team: "good", act: "floor",
@@ -52,7 +52,7 @@ export const PRESET: Record<number, RoleKey[]> = {
   5: ["murderer", "detective", "keymaster", "housekeeper", "witness"],
   6: ["murderer", "accomplice", "detective", "keymaster", "housekeeper", "witness"],
   7: ["murderer", "accomplice", "detective", "keymaster", "housekeeper", "witness", "windowcleaner"],
-  8: ["murderer", "accomplice", "detective", "keymaster", "housekeeper", "witness", "windowcleaner", "drunk"],
+  8: ["murderer", "accomplice", "detective", "keymaster", "housekeeper", "witness", "windowcleaner"],
   9: ["murderer", "accomplice", "detective", "keymaster", "housekeeper", "witness", "windowcleaner", "drunk"],
 };
 
@@ -63,6 +63,6 @@ export const floorsFor = (n: number) => Math.max(2, Math.min(MAX_FLOORS, n));
 export const closedFor = (n: number) => Math.max(0, n - 4);
 export const MAX_FLOORS = 9;
 export const daysFor = (n: number) => (n <= 4 ? 2 : n <= 6 ? 3 : 4);
-export const COLOR: Record<Team, string> = { good: "#5ad1c8", evil: "#ff5a5f" };
+export const COLOR: Record<Team, string> = { good: "#5ad1c8", evil: "#ff5a5f", neutral: "#f2b84b" };
 export const floorOf = (room: number) => Math.floor(room / 100);
 export const colOf = (room: number) => room % 100;
