@@ -75,6 +75,36 @@ function check(s: State) {
   }
 }
 
+// one human host + bots: bots must carry every phase forward on their own
+function playWithBots(n: number) {
+  const { state: s } = newRoom("BOTS", "Human");
+  for (let i = 1; i < n; i++) applyAction(s, s.hostId, { type: "addBot" });
+  applyAction(s, s.hostId, { type: "settings", settings: defaultSettings(n) });
+  applyAction(s, s.hostId, { type: "start" });
+  const h = s.players[0];
+  let t = Date.now();
+  for (let guard = 0; guard < 5000 && s.phase !== "end"; guard++) {
+    t += 1000;
+    if (s.phase === "deal" && !h.ready) applyAction(s, h.id, { type: "ready" }, t);
+    const v = viewFor(s, h.id, t);
+    const task = v.night?.task;
+    if (task && !task.blockedReason) {
+      if (!task.chosen) {
+        const opt = task.canSkip ? null : pick(task.options);
+        applyAction(s, h.id, { type: "nightAct", target: opt === null ? null : typeof opt === "object" ? opt.id : opt }, t);
+      } else if (!task.chosen.done) applyAction(s, h.id, { type: "nightDone" }, t);
+    }
+    if (s.phase === "day") applyAction(s, h.id, { type: "startVote" }, t);
+    if (s.phase === "vote" && h.alive && s.votes[h.id] === undefined) applyAction(s, h.id, { type: "vote", room: "skip" }, t);
+    if (s.phase === "voteResult") applyAction(s, h.id, { type: "nextNight" }, t);
+    advance(s, t);
+  }
+  if (s.phase !== "end") throw new Error(`bot game stuck in ${s.phase} night=${JSON.stringify(s.night)} (n=${n})`);
+  if (s.day > 1 && !(s.claims ?? []).length) throw new Error("bots never posted claims");
+}
+for (let i = 0; i < 120; i++) playWithBots(4 + (i % 6));
+console.log("ok: 120 games with 1 human + bots");
+
 const N = 400;
 for (let i = 0; i < N; i++) play(4 + (i % 6));
 console.log(`ok: ${N} games, good ${goodWins} / evil ${evilWins}`);

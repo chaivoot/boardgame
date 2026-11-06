@@ -207,11 +207,15 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
         <div className="plist">
           {view.players.map((pl) => (
             <div className="pitem" key={pl.id}>
-              <span>{pl.name}{pl.id === view.me.id && " (คุณ)"} {pl.isHost && <span className="pill">เจ้าของห้อง</span>}</span>
+              <span>{pl.bot && "🤖 "}{pl.name}{pl.id === view.me.id && " (คุณ)"} {pl.isHost && <span className="pill">เจ้าของห้อง</span>}</span>
               {host && !pl.isHost && <button className="btn ghost small" style={{ minHeight: 32, padding: "4px 10px" }} onClick={() => send({ type: "kick", playerId: pl.id })}>เตะ</button>}
             </div>
           ))}
         </div>
+        {host && n < 9 && (
+          <button className="btn block" style={{ marginTop: 8 }} disabled={busy} onClick={() => send({ type: "addBot" })}>+ เพิ่มบอท</button>
+        )}
+        {host && <p className="muted small" style={{ marginTop: 6 }}>บอทเล่นเองทั้งกลางคืนและโหวต ทุกเช้าจะแจ้งข้อมูลที่ได้ (บอทฝ่ายเงามืดจะโกหก)</p>}
       </div>
       <div className="panel">
         <div className="spread"><h3>บทบาทในเกม</h3>{host && <button className="btn ghost small" onClick={preset}>ค่าแนะนำ</button>}</div>
@@ -374,14 +378,33 @@ function NightScreen({ view, send, busy }: P) {
 }
 
 /* ---------------- DAY ---------------- */
+function Claims({ view }: { view: View }) {
+  const days = [...new Set(view.claims.map((c) => c.day))].sort((a, b) => b - a);
+  if (!days.length) return null;
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <h3>🤖 บอทแจ้งข้อมูล</h3>
+      {days.map((d) => (
+        <div key={d} style={{ marginTop: 8 }}>
+          <div className="muted small">เช้าวันที่ {d}</div>
+          {view.claims.filter((c) => c.day === d).map((c, i) => (
+            <div key={i} className="small" style={{ padding: "3px 0" }}><b>{c.name}:</b> {c.text}</div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PlayersAndLog({ view }: { view: View }) {
   return (
     <>
+      <Claims view={view} />
       <h3 style={{ marginTop: 16 }}>ผู้เล่น ({view.players.filter((x) => x.alive).length} คนยังอยู่)</h3>
       <div className="plist">
         {view.players.map((pl) => (
           <div key={pl.id} className={`pitem ${pl.alive ? "" : "dead"}`}>
-            <span>{pl.name}{pl.id === view.me.id && " (คุณ)"}</span>
+            <span>{pl.bot && "🤖 "}{pl.name}{pl.id === view.me.id && " (คุณ)"}</span>
             <span className="small muted">{pl.alive ? (pl.voted === undefined ? "" : pl.voted ? <span className="pill ok">โหวตแล้ว</span> : <span className="pill">ยังไม่โหวต</span>) : pl.death}</span>
           </div>
         ))}
