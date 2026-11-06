@@ -1,10 +1,10 @@
 import {
-  ROLES, PRESET, MIN_PLAYERS, MAX_PLAYERS, SPECIAL, floorsFor, daysFor, floorOf, colOf,
+  ROLES, PRESET, MIN_PLAYERS, MAX_PLAYERS, SPECIAL, floorsFor, closedFor, daysFor, floorOf, colOf, MAX_FLOORS,
   type RoleKey,
 } from "./roles.ts";
 
 /* ================= TYPES ================= */
-export type Mark = "murdered" | "empty" | "mob";
+export type Mark = "murdered" | "empty" | "mob" | "closed";
 export type Phase = "lobby" | "deal" | "night" | "day" | "vote" | "voteResult" | "end";
 
 export interface Player {
@@ -23,6 +23,10 @@ export interface Player {
 export interface Settings {
   roles: RoleKey[];
   floors: number;
+  /** rooms closed at random when the game starts */
+  closedRooms?: number;
+  /** follow the recommended setup for the current player count */
+  auto?: boolean;
   days: number;
   discussSec: number;
   revealOnDeath: boolean;
@@ -112,7 +116,7 @@ function addNotice(s: State, id: string, text: string) {
 /* ================= ROOM / LOBBY ================= */
 export function defaultSettings(n: number): Settings {
   const k = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, n));
-  return { roles: PRESET[k].slice(), floors: floorsFor(k), days: daysFor(k), discussSec: 300, revealOnDeath: false };
+  return { roles: PRESET[k].slice(), floors: floorsFor(k), closedRooms: closedFor(k), days: daysFor(k), discussSec: 300, revealOnDeath: false, auto: true };
 }
 
 export function newRoom(code: string, hostName: string, now = Date.now()): { state: State; player: Player } {
@@ -134,7 +138,14 @@ export function joinRoom(s: State, rawName: string): Player {
   if (s.players.some((p) => p.name === name)) fail("ชื่อนี้มีคนใช้แล้ว");
   const player: Player = { id: randomId(8), token: randomId(24), name, role: null, room: null, startRoom: null, alive: true, death: null, ready: false };
   s.players.push(player);
+  followCount(s);
   return player;
+}
+
+function followCount(s: State) {
+  if (s.settings.auto === false) return;
+  const keep = { discussSec: s.settings.discussSec, revealOnDeath: s.settings.revealOnDeath };
+  s.settings = { ...defaultSettings(s.players.length), ...keep };
 }
 
 /* ================= ACTIONS ================= */
@@ -168,7 +179,10 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
         if (!roles.includes("murderer")) roles.unshift("murderer");
         s.settings.roles = roles;
       }
-      if (st.floors !== undefined) s.settings.floors = Math.max(2, Math.min(5, Math.round(st.floors)));
+      if (st.auto) { const keep = { discussSec: s.settings.discussSec, revealOnDeath: s.settings.revealOnDeath }; s.settings = { ...defaultSettings(s.players.length), ...keep }; return; }
+      s.settings.auto = false;
+      if (st.floors !== undefined) s.settings.floors = Math.max(2, Math.min(MAX_FLOORS, Math.round(st.floors)));
+      if (st.closedRooms !== undefined) s.settings.closedRooms = Math.max(0, Math.min(20, Math.round(st.closedRooms)));
       if (st.days !== undefined) s.settings.days = Math.max(1, Math.min(5, Math.round(st.days)));
       if (st.discussSec !== undefined) s.settings.discussSec = Math.max(30, Math.min(1200, Math.round(st.discussSec)));
       if (st.revealOnDeath !== undefined) s.settings.revealOnDeath = !!st.revealOnDeath;
@@ -181,6 +195,7 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       let k = 1;
       while (s.players.some((p) => p.name === `Bot-${k}`)) k++;
       s.players.push({ id: randomId(8), token: randomId(24), name: `Bot-${k}`, role: null, room: null, startRoom: null, alive: true, death: null, ready: false, bot: true });
+      followCount(s);
       return;
     }
     case "kick": {
@@ -188,6 +203,7 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       if (s.phase !== "lobby") fail("เตะผู้เล่นได้เฉพาะก่อนเริ่มเกม");
       if (a.playerId === s.hostId) fail("เตะตัวเองไม่ได้");
       s.players = s.players.filter((p) => p.id !== a.playerId);
+      followCount(s);
       return;
     }
     case "start": {
@@ -260,11 +276,15 @@ function startGame(s: State) {
   const n = s.players.length;
   if (n < MIN_PLAYERS) fail(`ต้องมีผู้เล่นอย่างน้อย ${MIN_PLAYERS} คน`);
   if (s.settings.roles.length > n) fail("บทบาทมากกว่าจำนวนผู้เล่น");
-  if (s.settings.floors * 3 < n) fail("ห้องไม่พอสำหรับผู้เล่นทุกคน เพิ่มจำนวนชั้น");
+  if (s.settings.floors * 3 - (s.settings.closedRooms ?? 0) < n) fail("ห้องไม่พอสำหรับผู้เล่นทุกคน เพิ่มชั้นหรือลดห้องที่ปิด");
   const roles: RoleKey[] = s.settings.roles.slice();
   while (roles.length < n) roles.push("guest");
   const dealt = shuffle(roles);
-  const rooms = shuffle(allRooms(s.settings.floors)).slice(0, n);
+  const shuffled = shuffle(allRooms(s.settings.floors));
+  const closed = shuffled.slice(0, s.settings.closedRooms ?? 0);
+  const rooms = shuffled.slice(closed.length, closed.length + n);
+  s.marks = {};
+  for (const r of closed) s.marks[r] = "closed";
   s.players.forEach((p, i) => Object.assign(p, { role: dealt[i], room: rooms[i], startRoom: rooms[i], alive: true, death: null, ready: false }));
   s.phase = "deal";
   s.botAt = {};

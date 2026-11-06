@@ -58,7 +58,10 @@ export const PRESET: Record<number, RoleKey[]> = {
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 9;
-export const floorsFor = (n: number) => Math.max(2, Math.min(5, Math.ceil((n * 1.5) / 3)));
+/** One floor per player, 3 rooms per floor; (players − 4) random rooms are closed for maintenance. */
+export const floorsFor = (n: number) => Math.max(2, Math.min(MAX_FLOORS, n));
+export const closedFor = (n: number) => Math.max(0, n - 4);
+export const MAX_FLOORS = 9;
 export const daysFor = (n: number) => (n <= 4 ? 2 : n <= 6 ? 3 : 4);
 export const COLOR: Record<Team, string> = { good: "#5ad1c8", evil: "#ff5a5f" };
 export const floorOf = (room: number) => Math.floor(room / 100);

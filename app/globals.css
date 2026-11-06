@@ -62,6 +62,7 @@ label.chk input{width:20px;height:20px;accent-color:var(--good)}
 .room .mk b{font-family:Oswald;font-size:15px;letter-spacing:1px}
 .mk.murdered{background:repeating-linear-gradient(45deg,#3a1215,#3a1215 6px,#2c0e10 6px,#2c0e10 12px);color:#ffb3b5;border:1px solid var(--evil)}
 .mk.empty{background:#1a2230;color:#b9c4d6;border:1px solid var(--empty)}
+.mk.closed{background:repeating-linear-gradient(-45deg,#1a1c20,#1a1c20 5px,#22252b 5px,#22252b 10px);color:#8d95a1;border:1px dashed #3b414b}
 .mk.mob{background:#36280c;color:#ffd98f;border:1px solid var(--gold)}
 .cols{display:grid;grid-template-columns:44px repeat(3,1fr);gap:6px;font-family:Kanit;font-size:12px;color:var(--muted);text-align:center}
 .daytrack{display:flex;gap:8px;justify-content:center;margin-top:10px}
