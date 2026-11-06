@@ -4,7 +4,7 @@ import Link from "next/link";
 import { API, BASE, clearSession, getName, getSession, postJSON, setName, setSession, type Session } from "@/components/client.ts";
 import { Board, Card, DayTrack, Keycard, LinePicker, Logo, Overlay, Rules } from "@/components/mib-ui.tsx";
 import { ROLES, SPECIAL, COLOR, MIN_PLAYERS, MAX_FLOORS, type RoleKey } from "@/lib/meninblack/roles.ts";
-import type { Action, Settings } from "@/lib/meninblack/engine.ts";
+import type { Action, ClaimInfo, Settings } from "@/lib/meninblack/engine.ts";
 import type { View } from "@/lib/meninblack/view.ts";
 
 const POLL_MS = 1200;
@@ -377,17 +377,103 @@ function NightScreen({ view, send, busy }: P) {
 }
 
 /* ---------------- DAY ---------------- */
+const INFO_ROLES: RoleKey[] = ["keymaster", "housekeeper", "windowcleaner", "detective", "accomplice", "witness"];
+
+/** Lets a living player announce a role (true or fake) and, optionally, what they found (true or made up). */
+function ClaimForm({ view, send, busy }: { view: View; send: P["send"]; busy: boolean }) {
+  const realRole = view.me.role!;
+  const roleChoices = [...new Set<RoleKey>([realRole, ...view.settings.roles, "guest"])];
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<RoleKey>(realRole);
+  const [mode, setMode] = useState<ClaimInfo["mode"]>(view.myLastResult ? "real" : "none");
+  const [floor, setFloor] = useState(1);
+  const [col, setCol] = useState(1);
+  const [count, setCount] = useState(1);
+  const [room, setRoom] = useState(101);
+  const [pid, setPid] = useState(view.players.find((x) => x.id !== view.me.id)?.id ?? "");
+  const [seen, setSeen] = useState<"quiet" | "higher" | "lower" | "same">("quiet");
+  const mine = view.claims.find((c) => c.day === view.day && c.name === view.me.name);
+  const canFake = INFO_ROLES.includes(role);
+  const floors = Array.from({ length: view.floors }, (_, i) => view.floors - i);
+  const rooms = floors.flatMap((f) => [1, 2, 3].map((c) => f * 100 + c)).filter((r) => view.marks[r] !== "closed");
+  const effMode = mode === "fake" && !canFake ? "none" : mode;
+  const submit = () => {
+    const info: ClaimInfo = effMode === "fake" ? { mode: "fake", floor, col, count, room, playerId: pid, seen } : { mode: effMode };
+    send({ type: "claim", role, info }).then(() => setOpen(false));
+  };
+  if (!view.me.alive) return null;
+  if (!open) return (
+    <button className="btn block" style={{ marginTop: 16 }} onClick={() => setOpen(true)}>
+      📢 {mine ? "แก้ประกาศของฉัน" : "ประกาศข้อมูลของฉัน"}
+    </button>
+  );
+  const sel = (v: number, set: (n: number) => void, opts: number[], label: (n: number) => string) => (
+    <select value={v} onChange={(e) => set(+e.target.value)}>{opts.map((o) => <option key={o} value={o}>{label(o)}</option>)}</select>
+  );
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <h3>📢 ประกาศข้อมูลของฉัน</h3>
+      <label className="small">อ้างว่าเป็น
+        <select value={role} onChange={(e) => setRole(e.target.value as RoleKey)}>
+          {roleChoices.map((r) => <option key={r} value={r}>{ROLES[r].th} ({ROLES[r].en}){r === realRole ? " — บทบาทจริง" : ""}</option>)}
+        </select>
+      </label>
+      <div className="small" style={{ marginTop: 10 }}>ข้อมูลที่เช็ค</div>
+      <div className="grid3" style={{ marginTop: 4 }}>
+        <button className={`btn small ${effMode === "none" ? "sel" : ""}`} onClick={() => setMode("none")}>ไม่บอก</button>
+        <button className={`btn small ${effMode === "real" ? "sel" : ""}`} onClick={() => setMode("real")} disabled={!view.myLastResult}>บอกตามจริง</button>
+        <button className={`btn small ${effMode === "fake" ? "sel" : ""}`} onClick={() => setMode("fake")} disabled={!canFake}>แต่งเอง</button>
+      </div>
+      {effMode === "real" && <p className="small muted" style={{ marginTop: 8 }}>ผลเมื่อคืนของคุณ: {view.myLastResult}</p>}
+      {effMode === "fake" && (
+        <div className="grid2" style={{ marginTop: 8 }}>
+          {role === "keymaster" && <label className="small">ล็อกห้อง{sel(room, setRoom, rooms, (r) => `ห้อง ${r}`)}</label>}
+          {(role === "housekeeper" || role === "witness" || role === "detective" || role === "accomplice") && (
+            <label className="small">ชั้น{sel(floor, setFloor, floors, (f) => `ชั้น ${f}`)}</label>
+          )}
+          {role === "windowcleaner" && <label className="small">แถว{sel(col, setCol, [1, 2, 3], (c) => `แถว ${c}`)}</label>}
+          {(role === "housekeeper" || role === "windowcleaner") && (
+            <label className="small">ผู้รอดชีวิต{sel(count, setCount, Array.from({ length: (role === "housekeeper" ? 3 : view.floors) + 1 }, (_, i) => i), (n) => `${n} คน`)}</label>
+          )}
+          {(role === "detective" || role === "accomplice") && (
+            <label className="small">ผู้เล่น
+              <select value={pid} onChange={(e) => setPid(e.target.value)}>
+                {view.players.filter((x) => x.id !== view.me.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </label>
+          )}
+          {role === "witness" && (
+            <label className="small">เห็นอะไร
+              <select value={seen} onChange={(e) => setSeen(e.target.value as typeof seen)}>
+                <option value="quiet">เงียบสงบ ไม่เห็นฆาตกร</option>
+                <option value="higher">ห้องฆาตกรสูงกว่า</option>
+                <option value="lower">ห้องฆาตกรต่ำกว่า</option>
+                <option value="same">ห้องฆาตกรชั้นเดียวกัน</option>
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+      <div className="row" style={{ marginTop: 12 }}>
+        <button className="btn ghost" onClick={() => setOpen(false)}>ยกเลิก</button>
+        <button className="btn primary" style={{ flex: 1 }} disabled={busy} onClick={submit}>ประกาศ</button>
+      </div>
+      <p className="muted small" style={{ marginTop: 8 }}>ทุกคนจะเห็นประกาศนี้ ระบบไม่ได้ตรวจว่าจริงหรือหลอก</p>
+    </div>
+  );
+}
+
 function Claims({ view }: { view: View }) {
   const days = [...new Set(view.claims.map((c) => c.day))].sort((a, b) => b - a);
   if (!days.length) return null;
   return (
     <div className="panel" style={{ marginTop: 16 }}>
-      <h3>🤖 บอทแจ้งข้อมูล</h3>
+      <h3>📢 ประกาศจากผู้เล่น</h3>
       {days.map((d) => (
         <div key={d} style={{ marginTop: 8 }}>
           <div className="muted small">เช้าวันที่ {d}</div>
           {view.claims.filter((c) => c.day === d).map((c, i) => (
-            <div key={i} className="small" style={{ padding: "3px 0" }}><b>{c.name}:</b> {c.text}</div>
+            <div key={i} className="small" style={{ padding: "3px 0" }}><b>{c.bot && "🤖 "}{c.name}:</b> {c.text}</div>
           ))}
         </div>
       ))}
@@ -395,9 +481,10 @@ function Claims({ view }: { view: View }) {
   );
 }
 
-function PlayersAndLog({ view }: { view: View }) {
+function PlayersAndLog({ view, send, busy }: { view: View; send?: P["send"]; busy?: boolean }) {
   return (
     <>
+      {send && (view.phase === "day" || view.phase === "vote") && <ClaimForm key={view.day} view={view} send={send} busy={!!busy} />}
       <Claims view={view} />
       <h3 style={{ marginTop: 16 }}>ผู้เล่น ({view.players.filter((x) => x.alive).length} คนยังอยู่)</h3>
       <div className="plist">
@@ -433,7 +520,7 @@ function DayScreen({ view, send, busy, now }: P) {
         )}
       </div>
       <Board floors={view.floors} marks={view.marks} />
-      <PlayersAndLog view={view} />
+      <PlayersAndLog view={view} send={send} busy={busy} />
       {view.me.isHost && <Fab><button className="btn primary" disabled={busy} onClick={() => send({ type: "startVote" })}>เปิดโหวตเลย</button></Fab>}
     </div>
   );
@@ -458,7 +545,7 @@ function VoteScreen({ view, send, busy }: P) {
         {my === null ? (view.me.alive ? "คุณยังไม่ได้โหวต" : "") : my === "skip" ? "คุณโหวต: ไม่ประชาทัณฑ์" : <>คุณโหวต: <b>ห้อง {my}</b></>}
         <br /><span className="muted small">โหวตแล้ว {view.votedCount}/{alive} คน</span>
       </p>
-      <PlayersAndLog view={view} />
+      <PlayersAndLog view={view} send={send} busy={busy} />
       <Fab>
         {view.me.alive && <button className={`btn ${my === "skip" ? "sel" : ""}`} disabled={busy} onClick={() => send({ type: "vote", room: "skip" })}>ไม่ประชาทัณฑ์</button>}
         {view.me.isHost && <button className="btn danger" disabled={busy} onClick={() => { if (confirm("ปิดโหวตตอนนี้เลย? คนที่ยังไม่โหวตจะไม่นับ")) send({ type: "closeVote" }); }}>ปิดโหวต</button>}
@@ -485,7 +572,7 @@ function VoteResultScreen({ view, send, busy }: P) {
       <div className={`result ${/ถูกกำจัด/.test(r.line) ? "evil" : ""}`} style={{ margin: "8px 0" }}>{r.line}</div>
       <Tally view={view} />
       <Board floors={view.floors} marks={view.marks} />
-      <PlayersAndLog view={view} />
+      <PlayersAndLog view={view} send={send} busy={busy} />
       <Fab>
         {view.me.isHost
           ? <button className="btn primary" disabled={busy} onClick={() => send({ type: "nextNight" })}>เข้าสู่คืนที่ {view.day + 1}</button>

@@ -70,7 +70,7 @@ export interface State {
   result: { winner: "good" | "evil" | "drunk"; reason: string } | null;
   /** bots: when each bot will act next (ms), public statements they make each morning, and the role an evil bot pretends to be */
   botAt?: Record<string, number>;
-  claims?: { day: number; name: string; text: string }[];
+  claims?: { day: number; name: string; text: string; bot?: boolean }[];
   botRole?: Record<string, RoleKey>;
 }
 
@@ -153,6 +153,7 @@ export type Action =
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "kick"; playerId: string }
   | { type: "addBot" }
+  | { type: "claim"; role: RoleKey; info: ClaimInfo }
   | { type: "start" }
   | { type: "ready" }
   | { type: "nightAct"; target: number | string | null }
@@ -186,6 +187,15 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
       if (st.days !== undefined) s.settings.days = Math.max(1, Math.min(5, Math.round(st.days)));
       if (st.discussSec !== undefined) s.settings.discussSec = Math.max(30, Math.min(1200, Math.round(st.discussSec)));
       if (st.revealOnDeath !== undefined) s.settings.revealOnDeath = !!st.revealOnDeath;
+      return;
+    }
+    case "claim": {
+      if (s.phase !== "day" && s.phase !== "vote") fail("ประกาศข้อมูลได้เฉพาะตอนกลางวัน");
+      if (!me.alive) fail("ผู้เล่นที่ตายแล้วประกาศข้อมูลไม่ได้");
+      const text = buildClaim(s, me, a.role, a.info);
+      s.claims ??= [];
+      s.claims = s.claims.filter((c) => !(c.day === s.day && c.name === me.name));
+      s.claims.push({ day: s.day, name: me.name, text });
       return;
     }
     case "addBot": {
@@ -269,6 +279,59 @@ export function applyAction(s: State, playerId: string, a: Action, now = Date.no
     default: fail("คำสั่งไม่ถูกต้อง");
   }
   advance(s, now);
+}
+
+/* ================= PLAYER CLAIMS ================= */
+export type ClaimInfo =
+  | { mode: "none" }
+  | { mode: "real" }
+  | { mode: "fake"; floor?: number; col?: number; count?: number; room?: number; playerId?: string; seen?: "quiet" | "higher" | "lower" | "same" };
+
+/** Roles a player can pretend to have info for, and what that info looks like. */
+export const CLAIM_INFO_ROLES: RoleKey[] = ["keymaster", "housekeeper", "windowcleaner", "detective", "accomplice", "witness"];
+
+/** The player's own result from last night, as plain text (for "tell the truth"). */
+export function lastNightResult(s: State, p: Player): string | null {
+  const h = s.history[s.history.length - 1];
+  if (!h || h.night !== s.day) return null;
+  return h.acts.find((a) => a.name === p.name)?.text ?? null;
+}
+
+function buildClaim(s: State, me: Player, role: RoleKey, info: ClaimInfo): string {
+  if (!ROLES[role] || (role !== "guest" && !s.settings.roles.includes(role))) fail("บทบาทนี้ไม่มีในเกม");
+  const head = `ฉันเป็น${ROLES[role].th}`;
+  if (!info || info.mode === "none") return head;
+  if (info.mode === "real") {
+    const r = lastNightResult(s, me);
+    return r ? `${head} — ${r}` : `${head} — เมื่อคืนไม่มีข้อมูล`;
+  }
+  const floors = s.settings.floors;
+  const num = (v: unknown, lo: number, hi: number) => {
+    if (typeof v !== "number" || !Number.isInteger(v) || v < lo || v > hi) fail("ข้อมูลไม่ครบหรือไม่ถูกต้อง");
+    return v as number;
+  };
+  let body: string;
+  switch (role) {
+    case "keymaster": {
+      const r = num(info.room, 101, floors * 100 + 3);
+      if (!allRooms(floors).includes(r)) fail("ไม่มีห้องนี้");
+      body = `ล็อกห้อง ${r} แล้ว ห้องนี้ปลอดภัยคืนนี้`; break;
+    }
+    case "housekeeper": body = `ชั้น ${num(info.floor, 1, floors)} มีผู้รอดชีวิต ${num(info.count, 0, 3)} คน`; break;
+    case "windowcleaner": { const c = num(info.col, 1, 3); body = `แถว ${c} (ห้อง x0${c}) มีผู้รอดชีวิต ${num(info.count, 0, floors)} คน`; break; }
+    case "detective": case "accomplice": {
+      const t = playerById(s, String(info.playerId)) ?? fail("เลือกผู้เล่นไม่ถูกต้อง");
+      body = `${t!.name} พักอยู่ ชั้น ${num(info.floor, 1, floors)}`; break;
+    }
+    case "witness": {
+      const f = num(info.floor, 1, floors);
+      const rel = { higher: "สูงกว่า", lower: "ต่ำกว่า", same: "อยู่ชั้นเดียวกับ" } as const;
+      body = !info.seen || info.seen === "quiet" ? `ชั้น ${f} เงียบสงบ ไม่เห็นฆาตกร` : `เห็นฆาตกรขึ้นมาลงมือที่ชั้น ${f}! ห้องของฆาตกร ${rel[info.seen] ?? fail("ข้อมูลไม่ถูกต้อง")}ชั้นนี้`;
+      break;
+    }
+    default: return head;
+  }
+  return `${head} — ${body}`;
 }
 
 /* ================= GAME FLOW ================= */
@@ -625,7 +688,7 @@ function postBotClaims(s: State, n: Night) {
     else if (b.role === "guest") text = "ฉันเป็นแขก ไม่มีข้อมูลตอนกลางคืน";
     else if (n.acts[b.id]) text = `ฉันเป็น${ROLES[b.role!].th} — ${strip(n.acts[b.id].result)}`;
     else text = `ฉันเป็น${ROLES[b.role!].th} — คืนนี้ไม่มีข้อมูลใหม่`;
-    s.claims.push({ day: s.day, name: b.name, text });
+    s.claims.push({ day: s.day, name: b.name, text, bot: true });
   }
 }
 
