@@ -58,7 +58,7 @@ export const PRESET: Record<number, RoleKey[]> = {
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 9;
-/** One floor per player, 3 rooms per floor; (players − 4) random rooms are closed for maintenance. */
+/** One floor per player, 3 rooms per floor; (players − 4) random empty rooms become "body found" rooms. */
 export const floorsFor = (n: number) => Math.max(2, Math.min(MAX_FLOORS, n));
 export const closedFor = (n: number) => Math.max(0, n - 4);
 export const MAX_FLOORS = 9;
