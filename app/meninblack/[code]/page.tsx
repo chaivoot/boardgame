@@ -194,7 +194,7 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
   const problems = [
     n < MIN_PLAYERS && `ต้องมีผู้เล่นอย่างน้อย ${MIN_PLAYERS} คน (ตอนนี้ ${n})`,
     guests < 0 && `บทบาทเกินจำนวนผู้เล่น ${-guests} ใบ`,
-    usable < n && "ห้องไม่พอ เพิ่มชั้นหรือลดห้องที่ปิด",
+    usable < n && "ห้องไม่พอ เพิ่มชั้นหรือลดห้องพบศพ",
   ].filter(Boolean) as string[];
 
   return (
@@ -235,7 +235,7 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
           <label className="small">จำนวนชั้น
             <select value={st.floors} disabled={!host} onChange={(e) => set({ floors: +e.target.value })}>{Array.from({ length: MAX_FLOORS - 1 }, (_, i) => i + 2).map((f) => <option key={f}>{f}</option>)}</select>
           </label>
-          <label className="small">ห้องปิดปรับปรุง (สุ่ม)
+          <label className="small">ห้องพบศพ (สุ่ม)
             <select value={closed} disabled={!host} onChange={(e) => set({ closedRooms: +e.target.value })}>{Array.from({ length: Math.max(closed, st.floors * 3 - Math.max(n, MIN_PLAYERS)) + 1 }, (_, i) => i).map((f) => <option key={f}>{f}</option>)}</select>
           </label>
           <label className="small">จำนวนวัน
@@ -245,7 +245,7 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
             <select value={st.discussSec / 60} disabled={!host} onChange={(e) => set({ discussSec: +e.target.value * 60 })}>{[1, 2, 3, 4, 5, 7, 10].map((f) => <option key={f}>{f}</option>)}</select>
           </label>
         </div>
-        <p className="muted small" style={{ marginTop: 8 }}>{st.floors} ชั้น × 3 = {st.floors * 3} ห้อง · ปิด {closed} · มีคนพัก {n} · ห้องว่าง {Math.max(0, usable - n)}{st.auto !== false && " · ตั้งตามจำนวนผู้เล่นอัตโนมัติ"}</p>
+        <p className="muted small" style={{ marginTop: 8 }}>{st.floors} ชั้น × 3 = {st.floors * 3} ห้อง · พบศพ {closed} · มีคนพัก {n} · ห้องว่าง {Math.max(0, usable - n)}{st.auto !== false && " · ตั้งตามจำนวนผู้เล่นอัตโนมัติ"}</p>
         <label className="chk"><input type="checkbox" checked={st.revealOnDeath} disabled={!host} onChange={(e) => set({ revealOnDeath: e.target.checked })} /> เปิดเผยบทบาทเมื่อผู้เล่นตาย</label>
       </div>
       {problems.map((x) => <div key={x} className="err">{x}</div>)}

@@ -1,6 +1,6 @@
 // Plays many random games straight through the engine to check the rules never get stuck.
 // Run: npm test
-import { newRoom, joinRoom, applyAction, advance, defaultSettings, type State } from "../lib/meninblack/engine.ts";
+import { newRoom, joinRoom, applyAction, advance, defaultSettings, checkWin, type State } from "../lib/meninblack/engine.ts";
 import { viewFor } from "../lib/meninblack/view.ts";
 
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
@@ -160,6 +160,23 @@ console.log("ok: lynched drunk wins");
   if ((s.phase as string) === "voteResult") { applyAction(s, s.hostId, { type: "nextNight" }); if (Object.keys(s.suspects ?? {}).length) throw new Error("suspicions should reset at night"); }
 }
 console.log("ok: player claims and suspicions");
+
+// shadow side wins once living tenants equal the shadow side (a vote can never pass)
+{
+  const { state: s } = newRoom("TIE", "H");
+  for (let i = 1; i < 6; i++) joinRoom(s, `P${i}`);
+  applyAction(s, s.hostId, { type: "settings", settings: { roles: ["murderer", "accomplice", "detective", "keymaster", "housekeeper", "witness"] } });
+  applyAction(s, s.hostId, { type: "start" });
+  const good = s.players.filter((p) => p.role !== "murderer" && p.role !== "accomplice");
+  good[0].alive = false; good[1].alive = false; good[2].alive = false; // 1 tenant vs 2 shadow
+  if (checkWin(s)?.winner !== "evil") throw new Error("fewer tenants than shadow should be an evil win");
+  good[2].alive = true; // 2 tenants vs 2 shadow
+  const w = checkWin(s);
+  if (w?.winner !== "evil" || !w.reason.includes("เท่ากับ")) throw new Error(`tie should be an evil win: ${JSON.stringify(w)}`);
+  good[1].alive = true; // 3 vs 2
+  if (checkWin(s)) throw new Error("3 tenants vs 2 shadow should continue");
+}
+console.log("ok: tie goes to the shadow side");
 
 // one human host + bots: bots must carry every phase forward on their own
 function playWithBots(n: number) {

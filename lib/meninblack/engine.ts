@@ -353,7 +353,7 @@ function startGame(s: State) {
   const n = s.players.length;
   if (n < MIN_PLAYERS) fail(`ต้องมีผู้เล่นอย่างน้อย ${MIN_PLAYERS} คน`);
   if (s.settings.roles.length > n) fail("บทบาทมากกว่าจำนวนผู้เล่น");
-  if (s.settings.floors * 3 - (s.settings.closedRooms ?? 0) < n) fail("ห้องไม่พอสำหรับผู้เล่นทุกคน เพิ่มชั้นหรือลดห้องที่ปิด");
+  if (s.settings.floors * 3 - (s.settings.closedRooms ?? 0) < n) fail("ห้องไม่พอสำหรับผู้เล่นทุกคน เพิ่มชั้นหรือลดห้องพบศพ");
   const roles: RoleKey[] = s.settings.roles.slice();
   while (roles.length < n) roles.push("guest");
   const dealt = shuffle(roles);
@@ -612,7 +612,7 @@ export function checkWin(s: State): State["result"] {
   const alive = living(s);
   const evil = alive.filter(isEvil).length;
   const good = alive.filter((p) => p.role && ROLES[p.role].team === "good").length;
-  if (good <= evil) return { winner: "evil", reason: "ฝ่ายผู้เช่าเหลือไม่มากกว่าฝ่ายเงามืด" };
+  if (good <= evil) return { winner: "evil", reason: good === evil ? `ผู้เช่าเหลือ ${good} คน เท่ากับฝ่ายเงามืด โหวตยังไงก็ไม่ผ่าน` : "ผู้เช่าเหลือน้อยกว่าฝ่ายเงามืด" };
   return null;
 }
 
