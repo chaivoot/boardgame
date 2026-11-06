@@ -3,7 +3,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { API, BASE, clearSession, getName, getSession, postJSON, setName, setSession, type Session } from "@/components/client.ts";
 import { Board, Card, DayTrack, Keycard, Logo, Overlay, Rules } from "@/components/mib-ui.tsx";
-import { ROLES, SPECIAL, COLOR, PRESET, floorsFor, daysFor, MIN_PLAYERS, type RoleKey } from "@/lib/meninblack/roles.ts";
+import { ROLES, SPECIAL, COLOR, MIN_PLAYERS, MAX_FLOORS, type RoleKey } from "@/lib/meninblack/roles.ts";
 import type { Action, Settings } from "@/lib/meninblack/engine.ts";
 import type { View } from "@/lib/meninblack/view.ts";
 
@@ -182,7 +182,9 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
   const link = typeof window !== "undefined" ? `${window.location.origin}${BASE}/meninblack/${code}` : "";
   const set = (s: Partial<Settings>) => send({ type: "settings", settings: s });
   const toggle = (k: RoleKey, on: boolean) => set({ roles: on ? [...st.roles, k] : st.roles.filter((r) => r !== k) });
-  const preset = () => { const k = Math.max(MIN_PLAYERS, Math.min(9, n)); set({ roles: PRESET[k], floors: floorsFor(k), days: daysFor(k) }); };
+  const preset = () => set({ auto: true });
+  const closed = st.closedRooms ?? 0;
+  const usable = st.floors * 3 - closed;
   const share = async () => {
     try {
       if (navigator.share) await navigator.share({ title: "ชายชุดดำ", text: `เข้าห้อง ${code}`, url: link });
@@ -192,7 +194,7 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
   const problems = [
     n < MIN_PLAYERS && `ต้องมีผู้เล่นอย่างน้อย ${MIN_PLAYERS} คน (ตอนนี้ ${n})`,
     guests < 0 && `บทบาทเกินจำนวนผู้เล่น ${-guests} ใบ`,
-    st.floors * 3 < n && "ห้องไม่พอ เพิ่มจำนวนชั้น",
+    usable < n && "ห้องไม่พอ เพิ่มชั้นหรือลดห้องที่ปิด",
   ].filter(Boolean) as string[];
 
   return (
@@ -231,7 +233,10 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
         <h3>กระดานและเวลา</h3>
         <div className="grid2">
           <label className="small">จำนวนชั้น
-            <select value={st.floors} disabled={!host} onChange={(e) => set({ floors: +e.target.value })}>{[2, 3, 4, 5].map((f) => <option key={f}>{f}</option>)}</select>
+            <select value={st.floors} disabled={!host} onChange={(e) => set({ floors: +e.target.value })}>{Array.from({ length: MAX_FLOORS - 1 }, (_, i) => i + 2).map((f) => <option key={f}>{f}</option>)}</select>
+          </label>
+          <label className="small">ห้องปิดปรับปรุง (สุ่ม)
+            <select value={closed} disabled={!host} onChange={(e) => set({ closedRooms: +e.target.value })}>{Array.from({ length: Math.max(closed, st.floors * 3 - Math.max(n, MIN_PLAYERS)) + 1 }, (_, i) => i).map((f) => <option key={f}>{f}</option>)}</select>
           </label>
           <label className="small">จำนวนวัน
             <select value={st.days} disabled={!host} onChange={(e) => set({ days: +e.target.value })}>{[1, 2, 3, 4, 5].map((f) => <option key={f}>{f}</option>)}</select>
@@ -240,7 +245,7 @@ function LobbyScreen({ view, send, busy, code }: P & { code: string }) {
             <select value={st.discussSec / 60} disabled={!host} onChange={(e) => set({ discussSec: +e.target.value * 60 })}>{[1, 2, 3, 4, 5, 7, 10].map((f) => <option key={f}>{f}</option>)}</select>
           </label>
         </div>
-        <p className="muted small" style={{ marginTop: 8 }}>{st.floors * 3} ห้อง · ห้องว่าง {Math.max(0, st.floors * 3 - n)} ห้อง</p>
+        <p className="muted small" style={{ marginTop: 8 }}>{st.floors} ชั้น × 3 = {st.floors * 3} ห้อง · ปิด {closed} · มีคนพัก {n} · ห้องว่าง {Math.max(0, usable - n)}{st.auto !== false && " · ตั้งตามจำนวนผู้เล่นอัตโนมัติ"}</p>
         <label className="chk"><input type="checkbox" checked={st.revealOnDeath} disabled={!host} onChange={(e) => set({ revealOnDeath: e.target.checked })} /> เปิดเผยบทบาทเมื่อผู้เล่นตาย</label>
       </div>
       {problems.map((x) => <div key={x} className="err">{x}</div>)}

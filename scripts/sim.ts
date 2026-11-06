@@ -75,6 +75,18 @@ function check(s: State) {
   }
 }
 
+// board setup follows player count: floors = players, (players - 4) random rooms closed, nobody lives in one
+for (let n = 4; n <= 9; n++) {
+  const { state: s } = newRoom("SIZE", "H");
+  for (let i = 1; i < n; i++) joinRoom(s, `P${i}`);
+  applyAction(s, s.hostId, { type: "start" });
+  const closed = Object.entries(s.marks).filter(([, m]) => m === "closed").map(([r]) => Number(r));
+  if (s.settings.floors !== n) throw new Error(`n=${n}: expected ${n} floors, got ${s.settings.floors}`);
+  if (closed.length !== n - 4) throw new Error(`n=${n}: expected ${n - 4} closed rooms, got ${closed.length}`);
+  if (s.players.some((p) => closed.includes(p.room!))) throw new Error(`n=${n}: a player lives in a closed room`);
+}
+console.log("ok: board size follows player count");
+
 // one human host + bots: bots must carry every phase forward on their own
 function playWithBots(n: number) {
   const { state: s } = newRoom("BOTS", "Human");
