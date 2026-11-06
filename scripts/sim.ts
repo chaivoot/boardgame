@@ -145,8 +145,21 @@ console.log("ok: lynched drunk wins");
   let threw = false;
   try { applyAction(s, s.players[0].id, { type: "claim", role: "housekeeper", info: { mode: "fake", floor: 99, count: 1 } }); } catch { threw = true; }
   if (!threw) throw new Error("out-of-range fake info should be rejected");
+  // suspicions: toggle on/off, can't suspect yourself, cleared at night
+  const [a1, b1] = s.players.filter((p) => p.alive);
+  applyAction(s, a1.id, { type: "suspect", playerId: b1.id, on: true });
+  if (!viewFor(s, b1.id).players.find((p) => p.id === b1.id)!.suspectedBy.includes(a1.name)) throw new Error("suspicion not shown");
+  applyAction(s, a1.id, { type: "suspect", playerId: b1.id, on: false });
+  if (viewFor(s, b1.id).players.find((p) => p.id === b1.id)!.suspectedBy.length) throw new Error("suspicion not cleared");
+  let selfOk = false;
+  try { applyAction(s, a1.id, { type: "suspect", playerId: a1.id, on: true }); } catch { selfOk = true; }
+  if (!selfOk) throw new Error("suspecting yourself should fail");
+  applyAction(s, a1.id, { type: "suspect", playerId: b1.id, on: true });
+  applyAction(s, s.hostId, { type: "startVote" });
+  for (const p of s.players.filter((q) => q.alive)) if ((s.phase as string) === "vote") applyAction(s, p.id, { type: "vote", room: "skip" });
+  if ((s.phase as string) === "voteResult") { applyAction(s, s.hostId, { type: "nextNight" }); if (Object.keys(s.suspects ?? {}).length) throw new Error("suspicions should reset at night"); }
 }
-console.log("ok: player claims");
+console.log("ok: player claims and suspicions");
 
 // one human host + bots: bots must carry every phase forward on their own
 function playWithBots(n: number) {
