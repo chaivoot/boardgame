@@ -67,7 +67,7 @@ export interface State {
   voteResult: { line: string; tally: { label: string; names: string[] }[] } | null;
   log: string[];
   history: { night: number; acts: { role: RoleKey; name: string; text: string }[] }[];
-  result: { winner: "good" | "evil"; reason: string } | null;
+  result: { winner: "good" | "evil" | "drunk"; reason: string } | null;
   /** bots: when each bot will act next (ms), public statements they make each morning, and the role an evil bot pretends to be */
   botAt?: Record<string, number>;
   claims?: { day: number; name: string; text: string }[];
@@ -499,6 +499,7 @@ function resolveVote(s: State) {
   const sorted = [...counts.entries()].sort((a, b) => b[1].length - a[1].length);
   const tally = sorted.map(([k, names]) => ({ label: k === "skip" ? "ไม่ประชาทัณฑ์" : `ห้อง ${k}`, names }));
   let line: string;
+  let lynched: Player | undefined;
   const top = sorted[0];
   const tie = sorted.length > 1 && sorted[1][1].length === top[1].length;
   if (!top || top[0] === "skip" || tie) {
@@ -507,6 +508,7 @@ function resolveVote(s: State) {
     const room = top[0] as number;
     const v = s.players.find((p) => p.alive && p.room === room);
     if (v) {
+      lynched = v;
       v.alive = false;
       v.death = `ถูกประชาทัณฑ์วันที่ ${s.day}`;
       s.marks[room] = "mob";
@@ -520,6 +522,7 @@ function resolveVote(s: State) {
   s.log.push(`วันที่ ${s.day}: ${line}`);
   s.voteResult = { line, tally };
   s.phase = "voteResult";
+  if (lynched?.role === "drunk") return endGame(s, { winner: "drunk", reason: `${lynched.name} คือคนเมา หลอกให้ทุกคนประชาทัณฑ์ตัวเองได้สำเร็จ` });
   const w = checkWin(s);
   if (w) return endGame(s, w);
   if (s.day >= s.settings.days) endGame(s, { winner: "evil", reason: `ครบ ${s.settings.days} วันแล้ว ฆาตกรยังลอยนวล` });
@@ -530,7 +533,8 @@ export function checkWin(s: State): State["result"] {
   if (!m || !m.alive) return { winner: "good", reason: "ฆาตกรถูกประชาทัณฑ์สำเร็จ" };
   const alive = living(s);
   const evil = alive.filter(isEvil).length;
-  if (alive.length - evil <= evil) return { winner: "evil", reason: "ฝ่ายผู้เช่าเหลือไม่มากกว่าฝ่ายเงามืด" };
+  const good = alive.filter((p) => p.role && ROLES[p.role].team === "good").length;
+  if (good <= evil) return { winner: "evil", reason: "ฝ่ายผู้เช่าเหลือไม่มากกว่าฝ่ายเงามืด" };
   return null;
 }
 
@@ -598,6 +602,8 @@ function botAct(s: State, b: Player) {
 }
 
 function botVote(s: State, b: Player): number | "skip" {
+  // the drunk wants to be lynched, so it sometimes votes for its own room to draw attention
+  if (b.role === "drunk" && b.room && !s.marks[b.room] && Math.random() < 0.4) return b.room;
   const rooms = openRooms(s).filter((r) => r !== b.room);
   if (!rooms.length) return "skip";
   // follow the room most others picked so far (bots blend in), otherwise guess
@@ -615,7 +621,7 @@ function postBotClaims(s: State, n: Night) {
   s.botRole ??= {};
   for (const b of s.players.filter((p) => p.bot && p.alive)) {
     let text: string;
-    if (isEvil(b)) text = fakeClaim(s, b);
+    if (isEvil(b) || b.role === "drunk") text = fakeClaim(s, b);
     else if (b.role === "guest") text = "ฉันเป็นแขก ไม่มีข้อมูลตอนกลางคืน";
     else if (n.acts[b.id]) text = `ฉันเป็น${ROLES[b.role!].th} — ${strip(n.acts[b.id].result)}`;
     else text = `ฉันเป็น${ROLES[b.role!].th} — คืนนี้ไม่มีข้อมูลใหม่`;
@@ -627,7 +633,7 @@ function fakeClaim(s: State, b: Player): string {
   const choices = (["housekeeper", "windowcleaner", "detective", "witness", "keymaster", "guest"] as RoleKey[])
     .filter((r) => r === "guest" || s.settings.roles.includes(r));
   // evil bots on the same team never pretend to be the same role
-  const taken = Object.entries(s.botRole!).filter(([id]) => id !== b.id).map(([, r]) => r);
+  const taken = Object.entries(s.botRole!).filter(([id]) => id !== b.id && isEvil(playerById(s, id)!) === isEvil(b)).map(([, r]) => r);
   const free = choices.filter((r) => r === "guest" || !taken.includes(r));
   const role = (s.botRole![b.id] ??= pick(free.length ? free : choices));
   const alive = s.players.filter((p) => p.alive);
