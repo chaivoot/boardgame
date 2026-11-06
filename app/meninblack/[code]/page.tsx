@@ -2,7 +2,7 @@
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { API, BASE, clearSession, getName, getSession, postJSON, setName, setSession, type Session } from "@/components/client.ts";
-import { Board, Card, DayTrack, Keycard, Logo, Overlay, Rules } from "@/components/mib-ui.tsx";
+import { Board, Card, DayTrack, Keycard, LinePicker, Logo, Overlay, Rules } from "@/components/mib-ui.tsx";
 import { ROLES, SPECIAL, COLOR, MIN_PLAYERS, MAX_FLOORS, type RoleKey } from "@/lib/meninblack/roles.ts";
 import type { Action, Settings } from "@/lib/meninblack/engine.ts";
 import type { View } from "@/lib/meninblack/view.ts";
@@ -357,13 +357,7 @@ function NightScreen({ view, send, busy }: P) {
         <>
           {task.kind === "room" && <Board floors={view.floors} marks={view.marks} pick={pickable} sel={typeof sel === "number" ? sel : null} onPick={setSel} />}
           {(task.kind === "floor" || task.kind === "col") && (
-            <div className="grid3">
-              {pickable.map((v) => (
-                <button key={v} className={`btn ${sel === v ? "sel" : ""}`} onClick={() => setSel(v)}>
-                  {task.kind === "floor" ? `ชั้น ${v}` : <>แถว {v}<br /><span className="small muted">x0{v}</span></>}
-                </button>
-              ))}
-            </div>
+            <LinePicker kind={task.kind} floors={view.floors} marks={view.marks} myRoom={view.me.room} sel={typeof sel === "number" ? sel : null} onPick={setSel} />
           )}
           {task.kind === "player" && (
             <div className="grid2">
