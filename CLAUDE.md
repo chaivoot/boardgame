@@ -8,8 +8,8 @@ The owner does not test on Vercel preview deployments. After finishing a change:
 4. Merge it right away. Vercel deploys `main` to production automatically.
 
 ## Project
-- Next.js (App Router, TypeScript), `basePath: /boardgame`, deployed on Vercel.
-- Production URL path: chaivoot.com/boardgame/... (rewritten from the main Astro site).
+- Next.js (App Router, TypeScript), deployed on Vercel at the root of https://boardgame.chaivoot.com
+  (no basePath; old `/boardgame/...` links redirect to `/...`).
 - Games live under `app/<game>/`, `app/api/<game>/`, `lib/<game>/`.
 - ชายชุดดำ (Men in Black): rules engine `lib/meninblack/engine.ts`, per-player view
   `lib/meninblack/view.ts`, storage `lib/meninblack/store.ts` (Upstash Redis via
